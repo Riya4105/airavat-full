@@ -76,20 +76,22 @@ def normalise_observations(obs, baseline):
 
 def match_signature(sst_anomalies, chl_anomalies, event_type):
     """
-    Computes DTW distance between observed anomalies
-    and a crisis signature template.
+    Computes multivariate DTW distance between observed anomalies
+    and a crisis signature template using both SST and Chl-a.
     Returns confidence score 0-1 (1 = perfect match).
     """
     sig_sst = get_signature_array(event_type, "sst")
     sig_chl = get_signature_array(event_type, "chl")
-
-    # Trim or pad observed series to match signature length
     sig_len = len(sig_sst)
-    obs_sst = sst_anomalies[-sig_len:] if len(sst_anomalies) >= sig_len else sst_anomalies
-    obs_chl = chl_anomalies[-sig_len:] if len(chl_anomalies) >= sig_len else chl_anomalies
 
-    # Compute DTW distance for both signals
+    # Trim observed series to signature length
+    obs_sst = sst_anomalies[-sig_len:] if len(sst_anomalies) >= sig_len \
+              else np.pad(sst_anomalies, (sig_len - len(sst_anomalies), 0))
+    obs_chl = chl_anomalies[-sig_len:] if len(chl_anomalies) >= sig_len \
+              else np.pad(chl_anomalies, (sig_len - len(chl_anomalies), 0))
+
     try:
+        # Individual DTW distances per signal
         dist_sst = dtw.distance(
             obs_sst.astype(np.double),
             sig_sst.astype(np.double)
@@ -98,13 +100,22 @@ def match_signature(sst_anomalies, chl_anomalies, event_type):
             obs_chl.astype(np.double),
             sig_chl.astype(np.double)
         )
+
+        # Multivariate combined distance
+        # SST weighted 60%, Chl-a weighted 40%
+        # Normalise each by their signature magnitude to equalise scales
+        sst_scale = max(np.std(sig_sst), 0.01)
+        chl_scale = max(np.std(sig_chl), 0.01)
+
+        norm_sst = dist_sst / sst_scale
+        norm_chl = dist_chl / chl_scale
+
+        combined = 0.6 * norm_sst + 0.4 * norm_chl
+
     except Exception:
         return 0.0
 
-    # Combined distance — weighted 60/40 SST/Chl-a
-    combined = 0.6 * dist_sst + 0.4 * dist_chl
-
-    # Convert distance to confidence (lower distance = higher confidence)
+    # Convert distance to confidence
     confidence = 1.0 / (1.0 + combined)
     return round(float(confidence), 4)
 
