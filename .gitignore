@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+data/raw/
+*.nc
+*.h5
+*.he5
+*.hdf
+.copernicusmarine/
+_netrc

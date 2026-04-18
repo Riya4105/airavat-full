@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AIRAVAT 3.0 — Environmental Sentinel</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- Header -->
+<div id="header">
+  <div>
+    <h1>AIRAVAT 3.0 — Environmental Sentinel</h1>
+    <div class="subtitle">Live ESG scores · <span id="last-updated">Loading...</span></div>
+  </div>
+  <div class="legend">
+    <span><i class="dot high"></i> HIGH alert</span>
+    <span><i class="dot warn"></i> Warning</span>
+    <span><i class="dot normal"></i> Normal</span>
+  </div>
+  <div id="adaptive-bar">Adaptive learning · TP: <span id="tp">0</span> · FP: <span id="fp">0</span> · Accuracy: <span id="acc">—</span></div>
+  <button id="simulate-btn" onclick="toggleSimulate()">▶ Simulate 8-day progression</button>
+</div>
+
+<!-- Main -->
+<div id="main">
+  <div id="map"></div>
+
+  <!-- Right panel -->
+  <div id="panel">
+
+    <!-- Zone detail -->
+    <div id="zone-detail">
+      <div id="detail-placeholder" style="color:var(--muted);font-size:12px;text-align:center;padding:20px 0;">
+        ◈ Select a zone on the map
+      </div>
+      <div id="detail-content" style="display:none">
+        <h3 id="detail-name">—</h3>
+        <span id="detail-badge" class="alert-badge">—</span>
+        <span id="detail-event" style="font-size:11px;color:var(--muted);margin-left:6px;">—</span>
+
+        <div style="font-size:10px;color:var(--muted);margin:6px 0 3px;">SIGNATURE CHAIN PROGRESS</div>
+        <div class="chain-bar" id="chain-dots"></div>
+        <div class="chain-desc" id="chain-desc">—</div>
+
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px;">CONVERGENCE CONFIDENCE</div>
+        <div class="conf-bar-wrap">
+          <div class="conf-bar-fill" id="conf-bar" style="width:0%"></div>
+        </div>
+        <div style="font-size:11px;color:var(--red);margin-bottom:8px;" id="conf-label">0%</div>
+
+        <div class="metrics-grid">
+          <div class="metric-box">
+            <div class="label">SST Δ (vs baseline)</div>
+            <div class="value" id="sst-delta">—</div>
+          </div>
+          <div class="metric-box">
+            <div class="label">Trajectory</div>
+            <div class="value" id="trajectory">—</div>
+          </div>
+          <div class="metric-box">
+            <div class="label">Priority score</div>
+            <div class="value" id="priority-val">—</div>
+          </div>
+          <div class="metric-box">
+            <div class="label">Event type</div>
+            <div class="value" id="event-type">—</div>
+          </div>
+        </div>
+
+        <div id="sst-chart-wrap">
+          <div style="font-size:10px;color:var(--muted);margin-bottom:4px;">
+            SST TIME-SERIES (°C) — LAST 14 DAYS
+          </div>
+          <canvas id="sst-chart" height="90"></canvas>
+        </div>
+
+        <div style="font-size:10px;color:var(--muted);margin:8px 0 3px;">RECOMMENDED ACTION</div>
+        <div id="rec-action" style="font-size:11px;color:var(--teal-l);line-height:1.4;">—</div>
+
+        <div class="feedback-row">
+          <button class="btn btn-confirm" onclick="sendFeedback('confirm')">✓ Confirm</button>
+          <button class="btn btn-fp" onclick="sendFeedback('false_positive')">✗ False positive</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Leaderboard -->
+    <div id="leaderboard">
+      <h4>Zone Priority Ranking</h4>
+      <div id="zone-list">Loading...</div>
+    </div>
+
+    <!-- Chat -->
+    <div id="chat-section">
+      <h4>✦ Ask AIRAVAT</h4>
+      <div id="chat-messages">Ask about any zone...</div>
+      <div class="chat-row">
+        <input id="chat-input" type="text"
+               placeholder="What needs attention?"
+               onkeydown="if(event.key==='Enter') sendQuery()"/>
+        <button id="chat-send" onclick="sendQuery()">Send</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
