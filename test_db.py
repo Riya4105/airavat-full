@@ -1,34 +1,41 @@
 # test_db.py
-# Verifies TimescaleDB connection and creates the core hypertable
+# Creates core tables on PostgreSQL (Railway compatible)
 
 import psycopg2
+import os
+from urllib.parse import urlparse
 
-# Connection details matching our docker run command
-CONN = {
-    "host": "localhost",
-    "port": 5432,
-    "database": "airavat",
-    "user": "airavat",
-    "password": "airavat123"
-}
+def get_db():
+    db_url = os.environ.get("DATABASE_URL")
+    if db_url:
+        parsed = urlparse(db_url)
+        return psycopg2.connect(
+            host=parsed.hostname,
+            port=parsed.port,
+            database=parsed.path[1:],
+            user=parsed.username,
+            password=parsed.password,
+            sslmode="require"
+        )
+    else:
+        return psycopg2.connect(
+            host="localhost", port=5432,
+            database="airavat", user="airavat",
+            password="airavat123"
+        )
 
 print("=" * 50)
 print("AIRAVAT 3.0 — Database Setup")
 print("=" * 50)
 
 try:
-    # Connect
-    conn = psycopg2.connect(**CONN)
+    conn = get_db()
     cursor = conn.cursor()
-    print("\n✅ Connected to TimescaleDB")
+    print("\n✅ Connected to PostgreSQL")
 
-    # Enable TimescaleDB extension
-    cursor.execute("CREATE EXTENSION IF NOT EXISTS timescaledb;")
-    print("✅ TimescaleDB extension enabled")
-
-    # Create the main observations table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS zone_observations (
+            id          SERIAL PRIMARY KEY,
             time        TIMESTAMPTZ NOT NULL,
             zone_id     TEXT        NOT NULL,
             sst         FLOAT,
@@ -40,16 +47,12 @@ try:
     """)
     print("✅ zone_observations table created")
 
-    # Convert to hypertable (TimescaleDB magic)
     cursor.execute("""
-        SELECT create_hypertable(
-            'zone_observations', 'time',
-            if_not_exists => TRUE
-        );
+        CREATE INDEX IF NOT EXISTS idx_zone_obs_time
+        ON zone_observations (zone_id, time DESC);
     """)
-    print("✅ Hypertable created — time-series optimised")
+    print("✅ Index created")
 
-    # Create zone baselines table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS zone_baselines (
             zone_id         TEXT PRIMARY KEY,
@@ -62,21 +65,20 @@ try:
     """)
     print("✅ zone_baselines table created")
 
-    # Create alerts table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS zone_alerts (
-            time            TIMESTAMPTZ NOT NULL,
-            zone_id         TEXT NOT NULL,
-            alert_level     TEXT,
-            priority_score  FLOAT,
-            chain_position  INT,
-            event_type      TEXT,
+            id                SERIAL PRIMARY KEY,
+            time              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            zone_id           TEXT NOT NULL,
+            alert_level       TEXT,
+            priority_score    FLOAT,
+            chain_position    INT,
+            event_type        TEXT,
             operator_feedback TEXT
         );
     """)
     print("✅ zone_alerts table created")
 
-    # Insert a test row to verify everything works
     cursor.execute("""
         INSERT INTO zone_observations
             (time, zone_id, sst, chl_a, source)
@@ -85,11 +87,9 @@ try:
     """)
     print("✅ Test row inserted")
 
-    # Read it back
     cursor.execute("""
         SELECT time, zone_id, sst, chl_a
-        FROM zone_observations
-        LIMIT 1;
+        FROM zone_observations LIMIT 1;
     """)
     row = cursor.fetchone()
     print(f"✅ Test row verified: zone={row[1]}, sst={row[2]}°C, chl_a={row[3]}")

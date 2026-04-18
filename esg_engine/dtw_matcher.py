@@ -166,13 +166,21 @@ def run_dtw_for_zone(zone_id):
     if not obs or not baseline or len(obs) < 3:
         conn.close()
         return {
-            "zone_id": zone_id,
-            "status": "insufficient_data",
-            "best_match": "normal",
-            "confidence": 0.0,
-            "chain_position": 1,
-            "chain_description": "Insufficient data",
-            "alert_level": "NORMAL"
+            "zone_id":           zone_id,
+            "zone_name":         ZONES[zone_id]["name"],
+            "best_match":        "normal",
+            "confidence":        0.0,
+            "all_scores":        {},
+            "chain_position":    1,
+            "chain_total":       3,
+            "chain_description": "Insufficient data — backfill pending",
+            "hist_sim":          0.0,
+            "slope_score":       0.0,
+            "priority":          0.0,
+            "alert_level":       "NORMAL",
+            "latest_sst":        0.0,
+            "latest_chl":        0.0,
+            "obs_count":         len(obs) if obs else 0,
         }
 
     sst_anom, chl_anom = normalise_observations(obs, baseline)
