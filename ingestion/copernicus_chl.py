@@ -15,16 +15,27 @@ from config.zones import ZONES
 
 warnings.filterwarnings("ignore")
 
-CONN = {
-    "host": "localhost",
-    "port": 5432,
-    "database": "airavat",
-    "user": "airavat",
-    "password": "airavat123"
-}
+import os
+from urllib.parse import urlparse
 
 def get_db():
-    return psycopg2.connect(**CONN)
+    db_url = os.environ.get("DATABASE_URL")
+    if db_url:
+        parsed = urlparse(db_url)
+        return psycopg2.connect(
+            host=parsed.hostname,
+            port=parsed.port,
+            database=parsed.path[1:],
+            user=parsed.username,
+            password=parsed.password,
+            sslmode="require"
+        )
+    else:
+        return psycopg2.connect(
+            host="localhost", port=5432,
+            database="airavat", user="airavat",
+            password="airavat123"
+        )
 
 def fetch_chl_for_zone(zone_id, zone_config, date_str):
     """

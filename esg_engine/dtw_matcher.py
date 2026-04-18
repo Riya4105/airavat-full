@@ -14,16 +14,27 @@ from dtaidistance import dtw
 from esg_engine.signatures import SIGNATURES, get_signature_names, get_signature_array
 from config.zones import ZONES
 
-CONN = {
-    "host": "localhost",
-    "port": 5432,
-    "database": "airavat",
-    "user": "airavat",
-    "password": "airavat123"
-}
+import os
+from urllib.parse import urlparse
 
 def get_db():
-    return psycopg2.connect(**CONN)
+    db_url = os.environ.get("DATABASE_URL")
+    if db_url:
+        parsed = urlparse(db_url)
+        return psycopg2.connect(
+            host=parsed.hostname,
+            port=parsed.port,
+            database=parsed.path[1:],
+            user=parsed.username,
+            password=parsed.password,
+            sslmode="require"
+        )
+    else:
+        return psycopg2.connect(
+            host="localhost", port=5432,
+            database="airavat", user="airavat",
+            password="airavat123"
+        )
 
 def get_recent_observations(conn, zone_id, days=14):
     """

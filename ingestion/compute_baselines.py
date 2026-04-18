@@ -11,20 +11,33 @@ import numpy as np
 from datetime import datetime, timedelta, timezone
 from config.zones import ZONES
 
-CONN = {
-    "host": "localhost",
-    "port": 5432,
-    "database": "airavat",
-    "user": "airavat",
-    "password": "airavat123"
-}
+from urllib.parse import urlparse
+
+def get_db():
+    db_url = os.environ.get("DATABASE_URL")
+    if db_url:
+        parsed = urlparse(db_url)
+        return psycopg2.connect(
+            host=parsed.hostname,
+            port=parsed.port,
+            database=parsed.path[1:],
+            user=parsed.username,
+            password=parsed.password,
+            sslmode="require"
+        )
+    else:
+        return psycopg2.connect(
+            host="localhost", port=5432,
+            database="airavat", user="airavat",
+            password="airavat123"
+        )
 
 def compute_baselines():
     print("=" * 58)
     print("AIRAVAT 3.0 — Zone Baseline Calculator")
     print("=" * 58)
 
-    conn = psycopg2.connect(**CONN)
+    conn = get_db()
     cur = conn.cursor()
 
     # Use last 90 days of real data
