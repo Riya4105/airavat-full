@@ -1,33 +1,28 @@
 # api/main.py
 # AIRAVAT 3.0 — Full Product FastAPI Backend
-# Endpoints:
-#   GET  /              health check
-#   GET  /zones         all 7 zones ESG scores ranked
-#   GET  /zones/{id}    single zone detail
-#   GET  /baseline      all zone baselines
-#   POST /query         natural language query via Groq
-#   POST /feedback      operator feedback logging
-#   GET  /feedback      retrieve feedback history
+
 from dotenv import load_dotenv
 load_dotenv()
+
 import sys
 import os
+import json
+import asyncio
+from datetime import datetime, timezone
+from urllib.parse import urlparse
+from typing import List
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime, timezone
 import psycopg2
-import json
-import os
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordRequestForm
 
 from esg_engine.dtw_matcher import run_all_zones, run_dtw_for_zone
 from api.models import FeedbackRequest, QueryRequest
+from api.auth import verify_password, create_token, get_current_agency, require_admin, AGENCIES
 from config.zones import ZONES
-
-from fastapi import WebSocket, WebSocketDisconnect
-from typing import List
-import asyncio
 
 app = FastAPI(
     title="AIRAVAT 3.0",
@@ -35,7 +30,6 @@ app = FastAPI(
     version="3.0.0"
 )
 
-# Allow all origins for development
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -43,9 +37,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-import os
-from urllib.parse import urlparse
-
+# ── Database ───────────────────────────────────────────────
 def get_db():
     db_url = os.environ.get("DATABASE_URL")
     if db_url:
@@ -64,8 +56,8 @@ def get_db():
             database="airavat", user="airavat",
             password="airavat123"
         )
-    
-# ── WebSocket Connection Manager ──────────────────────────
+
+# ── WebSocket ──────────────────────────────────────────────
 class ConnectionManager:
     def __init__(self):
         self.active: List[WebSocket] = []
@@ -90,9 +82,7 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# ── Background zone broadcaster ────────────────────────────
 async def broadcast_zones():
-    """Pushes zone updates to all connected clients every 30 seconds."""
     while True:
         try:
             if manager.active:
@@ -106,30 +96,28 @@ async def broadcast_zones():
             print(f"Broadcast error: {e}")
         await asyncio.sleep(30)
 
-# ── Startup event ──────────────────────────────────────────
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(broadcast_zones())
 
-# ── WebSocket endpoint ─────────────────────────────────────
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
-        # Send current zone data immediately on connect
         results = run_all_zones()
         await websocket.send_json({
             "type": "zone_update",
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "zones": results
         })
-        # Keep connection alive
         while True:
-            await websocket.receive_text()
+            msg = await websocket.receive_text()
+            if msg == "ping":
+                await websocket.send_json({"type": "pong"})
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
-# ── GET / ─────────────────────────────────────────────────
+# ── Health check ───────────────────────────────────────────
 @app.get("/")
 def health():
     return {
@@ -141,10 +129,49 @@ def health():
         "zones": len(ZONES)
     }
 
-# ── GET /zones ────────────────────────────────────────────
+# ── Auth endpoints ─────────────────────────────────────────
+@app.post("/auth/login")
+def login(form: OAuth2PasswordRequestForm = Depends()):
+    agency_id = form.username
+    if agency_id not in AGENCIES:
+        raise HTTPException(status_code=401, detail="Agency not found")
+    if not verify_password(form.password, agency_id):
+        raise HTTPException(status_code=401, detail="Incorrect password")
+    token = create_token(agency_id)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "agency": AGENCIES[agency_id]["name"],
+        "zones": AGENCIES[agency_id]["zones"],
+        "role": AGENCIES[agency_id]["role"]
+    }
+
+@app.get("/auth/me")
+def get_me(agency: dict = Depends(get_current_agency)):
+    return {
+        "agency_id": agency["sub"],
+        "name": agency["name"],
+        "zones": agency["zones"],
+        "role": agency["role"]
+    }
+
+# ── Zone endpoints ─────────────────────────────────────────
+@app.get("/zones/secure")
+def get_zones_secure(agency: dict = Depends(get_current_agency)):
+    try:
+        all_results = run_all_zones()
+        assigned = agency.get("zones", [])
+        filtered = [z for z in all_results if z["zone_id"] in assigned]
+        return {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "agency": agency["name"],
+            "zones": filtered
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/zones")
 def get_all_zones():
-    """Returns all 7 zones ranked by ESG priority score."""
     try:
         results = run_all_zones()
         return {
@@ -154,39 +181,29 @@ def get_all_zones():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ── GET /zones/{zone_id} ──────────────────────────────────
 @app.get("/zones/{zone_id}")
 def get_zone(zone_id: str):
-    """Returns detailed ESG analysis for a single zone."""
     zone_id = zone_id.upper()
     if zone_id not in ZONES:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Zone {zone_id} not found. Valid zones: {list(ZONES.keys())}"
-        )
+        raise HTTPException(status_code=404, detail=f"Zone {zone_id} not found")
     try:
-        result = run_dtw_for_zone(zone_id)
-        return result
+        return run_dtw_for_zone(zone_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ── GET /baseline ─────────────────────────────────────────
+# ── Baseline ───────────────────────────────────────────────
 @app.get("/baseline")
 def get_baselines():
-    """Returns zone personality baselines for all zones."""
     try:
         conn = get_db()
         cur = conn.cursor()
         cur.execute("""
-            SELECT zone_id, mean_sst, std_sst,
-                   mean_chl_a, std_chl_a, last_updated
-            FROM zone_baselines
-            ORDER BY zone_id;
+            SELECT zone_id, mean_sst, std_sst, mean_chl_a, std_chl_a, last_updated
+            FROM zone_baselines ORDER BY zone_id;
         """)
         rows = cur.fetchall()
         cur.close()
         conn.close()
-
         return {
             "baselines": [
                 {
@@ -204,10 +221,9 @@ def get_baselines():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ── GET /history/{zone_id} ────────────────────────────────
+# ── History ────────────────────────────────────────────────
 @app.get("/history/{zone_id}")
-def get_history(zone_id: str, days: int = 14):
-    """Returns raw observation history for a zone."""
+def get_history(zone_id: str, days: int = 30):
     zone_id = zone_id.upper()
     if zone_id not in ZONES:
         raise HTTPException(status_code=404, detail=f"Zone {zone_id} not found")
@@ -225,40 +241,31 @@ def get_history(zone_id: str, days: int = 14):
         rows = cur.fetchall()
         cur.close()
         conn.close()
-
         return {
             "zone_id":   zone_id,
             "zone_name": ZONES[zone_id]["name"],
             "days":      days,
             "observations": [
-                {
-                    "time":   r[0].isoformat(),
-                    "sst":    r[1],
-                    "chl_a":  r[2],
-                    "source": r[3]
-                }
+                {"time": r[0].isoformat(), "sst": r[1], "chl_a": r[2], "source": r[3]}
                 for r in rows
             ]
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ── POST /feedback ────────────────────────────────────────
+# ── Feedback ───────────────────────────────────────────────
 @app.post("/feedback")
 def post_feedback(req: FeedbackRequest):
-    """Logs operator feedback for adaptive learning."""
     try:
         conn = get_db()
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO zone_alerts
-                (time, zone_id, alert_level, event_type, operator_feedback)
+            INSERT INTO zone_alerts (time, zone_id, alert_level, event_type, operator_feedback)
             VALUES (NOW(), %s, %s, %s, %s);
         """, (req.zone_id, req.alert_level, req.event_type, req.feedback))
         conn.commit()
         cur.close()
         conn.close()
-
         return {
             "status": "logged",
             "zone_id": req.zone_id,
@@ -268,33 +275,27 @@ def post_feedback(req: FeedbackRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ── GET /feedback ─────────────────────────────────────────
 @app.get("/feedback")
 def get_feedback(zone_id: str = None):
-    """Retrieves feedback history, optionally filtered by zone."""
     try:
         conn = get_db()
         cur = conn.cursor()
         if zone_id:
             cur.execute("""
                 SELECT time, zone_id, alert_level, event_type, operator_feedback
-                FROM zone_alerts
-                WHERE zone_id = %s
+                FROM zone_alerts WHERE zone_id = %s
                 ORDER BY time DESC LIMIT 50;
             """, (zone_id.upper(),))
         else:
             cur.execute("""
                 SELECT time, zone_id, alert_level, event_type, operator_feedback
-                FROM zone_alerts
-                ORDER BY time DESC LIMIT 50;
+                FROM zone_alerts ORDER BY time DESC LIMIT 50;
             """)
         rows = cur.fetchall()
         cur.close()
         conn.close()
-
         tp = sum(1 for r in rows if r[4] == "confirm")
         fp = sum(1 for r in rows if r[4] == "false_positive")
-
         return {
             "total": len(rows),
             "true_positives": tp,
@@ -302,11 +303,8 @@ def get_feedback(zone_id: str = None):
             "accuracy": round(tp / len(rows), 2) if rows else 0,
             "feedback": [
                 {
-                    "time":      r[0].isoformat(),
-                    "zone_id":   r[1],
-                    "alert_level": r[2],
-                    "event_type":  r[3],
-                    "feedback":    r[4]
+                    "time": r[0].isoformat(), "zone_id": r[1],
+                    "alert_level": r[2], "event_type": r[3], "feedback": r[4]
                 }
                 for r in rows
             ]
@@ -314,57 +312,41 @@ def get_feedback(zone_id: str = None):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ── POST /query ───────────────────────────────────────────
+# ── NL Query ───────────────────────────────────────────────
 @app.post("/query")
 def natural_language_query(req: QueryRequest):
-    """
-    Accepts a natural language question and returns
-    structured marine intelligence using Groq LLaMA.
-    """
     try:
-        # Get current zone data to give context to the LLM
         zone_data = run_all_zones()
-
-        # Format zone summary for LLM context
         zone_summary = "\n".join([
             f"- {z['zone_name']}: {z['alert_level']} alert, "
             f"{z['best_match']} at step {z['chain_position']}/{z['chain_total']}, "
-            f"priority {z['priority']}, SST {z['latest_sst']}°C, "
-            f"Chl-a {z['latest_chl']} mg/m³"
+            f"priority {z['priority']}, SST {z['latest_sst']}C, Chl-a {z['latest_chl']} mg/m3"
             for z in zone_data
         ])
 
-        prompt = f"""You are AIRAVAT 3.0, an AI marine environmental sentinel 
-monitoring the Indian Ocean. You have real-time ESG (Ecological Stress Grade) 
-data for 7 zones.
-
+        prompt = f"""You are AIRAVAT 3.0, an AI marine environmental sentinel monitoring the Indian Ocean.
 Current zone status:
 {zone_summary}
-
 Operator question: {req.question}
-
 Respond in this exact format:
 SEVERITY: [HIGH/WARN/NORMAL]
-CHAIN STATE: [event type — step X of Y — description]
-EXPLANATION: [2-3 sentences explaining what is happening and why]
-ACTION: [specific recommended action for the operator]"""
+CHAIN STATE: [event type - step X of Y - description]
+EXPLANATION: [2-3 sentences]
+ACTION: [specific recommended action]"""
 
-        # Call Groq API
-        import urllib.request
         groq_key = os.environ.get("GROQ_API_KEY", "")
-
         if not groq_key:
-            # Return structured response without LLM if no key
             top = zone_data[0]
             return {
                 "question": req.question,
                 "severity": top["alert_level"],
-                "chain_state": f"{top['best_match']} — step {top['chain_position']} of {top['chain_total']}",
+                "chain_state": f"{top['best_match']} - step {top['chain_position']} of {top['chain_total']}",
                 "explanation": f"{top['zone_name']} has the highest priority score of {top['priority']}.",
                 "action": "Monitor closely and review chain progression.",
                 "source": "rule_based"
             }
 
+        import urllib.request
         payload = json.dumps({
             "model": "llama-3.3-70b-versatile",
             "messages": [{"role": "user", "content": prompt}],
@@ -384,10 +366,8 @@ ACTION: [specific recommended action for the operator]"""
             data = json.loads(response.read())
             answer = data["choices"][0]["message"]["content"]
 
-        # Parse structured response
-        lines = answer.strip().split("\n")
         parsed = {}
-        for line in lines:
+        for line in answer.strip().split("\n"):
             if line.startswith("SEVERITY:"):
                 parsed["severity"] = line.replace("SEVERITY:", "").strip()
             elif line.startswith("CHAIN STATE:"):
@@ -397,11 +377,7 @@ ACTION: [specific recommended action for the operator]"""
             elif line.startswith("ACTION:"):
                 parsed["action"] = line.replace("ACTION:", "").strip()
 
-        return {
-            "question": req.question,
-            **parsed,
-            "source": "groq_llama"
-        }
+        return {"question": req.question, **parsed, "source": "groq_llama"}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
