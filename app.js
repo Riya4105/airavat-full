@@ -1,6 +1,6 @@
-ï»¿// app.js â€” AIRAVAT 3.0 Full Product Frontend
+// app.js — AIRAVAT 3.0 Full Product Frontend
 
-const API = "https://airavat-full-production.up.railway.app";
+const API = "https://airavat-full.onrender.com";
 
 let map, markers = {}, selectedZone = null;
 let sstChart = null, simulationRunning = false;
@@ -11,7 +11,7 @@ const COLOURS = { HIGH: "#EF4444", WARN: "#F97316", NORMAL: "#6B7280" };
 function initMap() {
   map = L.map("map", { center: [15, 75], zoom: 5 });
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-    attribution: "Â© CARTO Â© OpenStreetMap", maxZoom: 18
+    attribution: "© CARTO © OpenStreetMap", maxZoom: 18
   }).addTo(map);
 }
 
