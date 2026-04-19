@@ -349,58 +349,11 @@ function toggleSimulate() {
   }, 1000);
 }
 
-// ── WebSocket connection ───────────────────────────────────
-function connectWebSocket() {
-  const wsUrl = API.replace("https://", "wss://").replace("http://", "ws://") + "/ws";
-  const ws = new WebSocket(wsUrl);
-
-  ws.onopen = () => {
-    console.log("WebSocket connected");
-    document.getElementById("last-updated").textContent =
-      "Live — " + new Date().toLocaleTimeString();
-  };
-
-  ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    if (data.type === "zone_update") {
-      allZoneData = data.zones;
-      document.getElementById("last-updated").textContent =
-        "Live · " + new Date().toLocaleTimeString();
-
-      // Update markers
-      allZoneData.forEach(z => {
-        const pos = ZONE_CENTRES[z.zone_id];
-        if (!pos) return;
-        const icon = makeIcon(z.alert_level, z.chain_position, z.chain_total);
-        if (markers[z.zone_id]) {
-          markers[z.zone_id].setIcon(icon);
-        } else {
-          const m = L.marker(pos, { icon }).addTo(map);
-          m.on("click", () => selectZone(z.zone_id));
-          markers[z.zone_id] = m;
-        }
-      });
-
-      renderLeaderboard(allZoneData);
-      if (selectedZone) selectZone(selectedZone);
-    }
-  };
-
-  ws.onclose = () => {
-    console.log("WebSocket disconnected — reconnecting in 5s");
-    document.getElementById("last-updated").textContent = "Reconnecting...";
-    setTimeout(connectWebSocket, 5000);
-  };
-
-  ws.onerror = (err) => {
-    console.error("WebSocket error:", err);
-    ws.close();
-  };
-}
-
 // ── Boot ───────────────────────────────────────────────────
 initMap();
-loadZones();           // Initial HTTP load while WS connects
+loadZones();
 loadFeedbackStats();
-connectWebSocket();    // Then switch to WebSocket for live updates
+
+// Auto-refresh every 60 seconds
+setInterval(loadZones, 60000);
 setInterval(loadFeedbackStats, 30000);
