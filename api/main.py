@@ -24,6 +24,8 @@ from api.models import FeedbackRequest, QueryRequest
 from api.auth import verify_password, create_token, get_current_agency, require_admin, AGENCIES
 from config.zones import ZONES
 
+from api.alerts import dispatch_alert, format_alert_message
+
 app = FastAPI(
     title="AIRAVAT 3.0",
     description="AI-Powered Marine Environmental Sentinel — Full Product API",
@@ -308,6 +310,67 @@ def get_feedback(zone_id: str = None):
                 }
                 for r in rows
             ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+# ── POST /alert/dispatch ───────────────────────────────────
+@app.post("/alert/dispatch")
+def dispatch_zone_alert(
+    zone_id: str,
+    channel: str = "sms",
+    agency: dict = Depends(get_current_agency)
+):
+    """
+    Manually dispatch an alert for a zone to agency operators.
+    Requires authentication. channel = 'sms' or 'whatsapp'
+    """
+    zone_id = zone_id.upper()
+    if zone_id not in ZONES:
+        raise HTTPException(status_code=404, detail=f"Zone {zone_id} not found")
+    if zone_id not in agency.get("zones", []):
+        raise HTTPException(status_code=403, detail="Zone not assigned to your agency")
+
+    try:
+        zone_data = run_dtw_for_zone(zone_id)
+        results = dispatch_alert(zone_data, agency["sub"], channel)
+        return {
+            "status": "dispatched",
+            "zone_id": zone_id,
+            "zone_name": zone_data["zone_name"],
+            "alert_level": zone_data["alert_level"],
+            "channel": channel,
+            "results": results,
+            "message": format_alert_message(zone_data)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ── POST /alert/auto ───────────────────────────────────────
+@app.post("/alert/auto")
+def auto_dispatch_high_alerts(agency: dict = Depends(require_admin)):
+    """
+    Admin only — scans all zones and dispatches alerts
+    for any zone currently at HIGH alert level.
+    """
+    try:
+        all_zones = run_all_zones()
+        high_zones = [z for z in all_zones if z["alert_level"] == "HIGH"]
+        dispatched = []
+
+        for zone in high_zones:
+            results = dispatch_alert(zone, agency["sub"], "sms")
+            dispatched.append({
+                "zone_id": zone["zone_id"],
+                "zone_name": zone["zone_name"],
+                "priority": zone["priority"],
+                "results": results
+            })
+
+        return {
+            "status": "complete",
+            "high_zones_found": len(high_zones),
+            "dispatched": dispatched
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
