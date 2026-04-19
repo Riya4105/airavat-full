@@ -409,25 +409,23 @@ ACTION: [specific recommended action]"""
                 "source": "rule_based"
             }
 
-        import urllib.request
-        payload = json.dumps({
-            "model": "llama-3.3-70b-versatile",
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 300
-        }).encode("utf-8")
-
-        req_obj = urllib.request.Request(
+        import requests as req_lib
+        response = req_lib.post(
             "https://api.groq.com/openai/v1/chat/completions",
-            data=payload,
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {groq_key}"
-            }
+            },
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 300
+            },
+            timeout=30
         )
-
-        with urllib.request.urlopen(req_obj) as response:
-            data = json.loads(response.read())
-            answer = data["choices"][0]["message"]["content"]
+        response.raise_for_status()
+        data = response.json()
+        answer = data["choices"][0]["message"]["content"]
 
         parsed = {}
         for line in answer.strip().split("\n"):
