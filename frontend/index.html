@@ -11,109 +11,151 @@
 </head>
 <body>
 
-<div id="header">
-  <div>
-    <h1>AIRAVAT 3.0 — Environmental Sentinel</h1>
-    <div class="subtitle">Live ESG scores · <span id="last-updated">Loading...</span></div>
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div id="login-box">
+    <div id="login-logo">AIRAVAT 3.0</div>
+    <div id="login-subtitle">AI-Powered Marine Environmental Sentinel</div>
+    <div id="login-tagline">Indian Ocean · 7 Zones · Real-time ESG Intelligence</div>
+
+    <div class="login-field">
+      <label>Agency ID</label>
+      <input id="login-username" type="text" placeholder="e.g. coast_guard"
+             onkeydown="if(event.key==='Enter') doLogin()"/>
+    </div>
+    <div class="login-field">
+      <label>Password</label>
+      <input id="login-password" type="password" placeholder="Enter password"
+             onkeydown="if(event.key==='Enter') doLogin()"/>
+    </div>
+
+    <button id="login-btn" onclick="doLogin()">Access Sentinel</button>
+    <div id="login-error"></div>
+
+    <div id="login-hint">
+      <div class="hint-title">Demo credentials</div>
+      <div class="hint-row" onclick="fillLogin('coast_guard','coastguard123')">
+        <span class="hint-role admin">ADMIN</span> coast_guard · All 7 zones
+      </div>
+      <div class="hint-row" onclick="fillLogin('fisheries_kerala','fisheries123')">
+        <span class="hint-role operator">OPS</span> fisheries_kerala · Z3 Z6
+      </div>
+      <div class="hint-row" onclick="fillLogin('conservation_ngo','conservation123')">
+        <span class="hint-role observer">OBS</span> conservation_ngo · Z3 Z5 Z7
+      </div>
+      <div class="hint-row" onclick="fillLogin('thalassa_admin','thalassa2026')">
+        <span class="hint-role admin">ADMIN</span> thalassa_admin · All 7 zones
+      </div>
+    </div>
   </div>
-  <div class="legend">
-    <span><i class="dot high"></i> HIGH alert</span>
-    <span><i class="dot warn"></i> Warning</span>
-    <span><i class="dot normal"></i> Normal</span>
-  </div>
-  <div id="adaptive-bar">
-    Adaptive learning · TP: <span id="tp">0</span> · FP: <span id="fp">0</span> · Accuracy: <span id="acc">—</span>
-  </div>
-  <button id="simulate-btn" onclick="toggleSimulate()">Simulate 8-day progression</button>
 </div>
 
-<div id="main">
+<!-- MAIN APP (hidden until login) -->
+<div id="app" style="display:none; height:100vh; display:none; flex-direction:column;">
 
-  <!-- LEFT SIDEBAR -->
-  <div id="left-panel">
-    <div id="leaderboard">
-      <h4>Zone Priority Ranking</h4>
-      <div id="zone-list">Loading...</div>
+  <div id="header">
+    <div>
+      <h1>AIRAVAT 3.0 — Environmental Sentinel</h1>
+      <div class="subtitle">Live ESG scores · <span id="last-updated">Loading...</span></div>
     </div>
-    <div id="left-footer">
-      <div class="footer-label">Data sources</div>
-      <div class="footer-val">NASA MUR SST · Copernicus Chl-a</div>
-      <div class="footer-label" style="margin-top:6px;">Coverage</div>
-      <div class="footer-val">7 Indian Ocean zones</div>
-      <div class="footer-label" style="margin-top:6px;">Update cycle</div>
-      <div class="footer-val">Every 30 seconds</div>
+    <div class="legend">
+      <span><i class="dot high"></i> HIGH alert</span>
+      <span><i class="dot warn"></i> Warning</span>
+      <span><i class="dot normal"></i> Normal</span>
     </div>
+    <div id="adaptive-bar">
+      Adaptive learning · TP: <span id="tp">0</span> · FP: <span id="fp">0</span> · Accuracy: <span id="acc">—</span>
+    </div>
+    <div id="agency-badge">—</div>
+    <button id="simulate-btn" onclick="toggleSimulate()">Simulate 8-day progression</button>
+    <button id="logout-btn" onclick="doLogout()">Logout</button>
   </div>
 
-  <!-- MAP -->
-  <div id="map"></div>
+  <div id="main">
 
-  <!-- RIGHT SIDEBAR -->
-  <div id="right-panel">
-
-    <div id="zone-detail">
-      <div id="detail-placeholder" style="color:var(--muted);font-size:12px;text-align:center;padding:20px 0;">
-        ◈ Select a zone on the map<br/>
-        <span style="font-size:10px;">Click any marker to view its<br/>signature chain and confidence score</span>
+    <div id="left-panel">
+      <div id="leaderboard">
+        <h4>Zone Priority Ranking</h4>
+        <div id="zone-list">Loading...</div>
       </div>
-      <div id="detail-content" style="display:none">
-        <h3 id="detail-name">—</h3>
-        <span id="detail-badge" class="alert-badge">—</span>
-        <span id="detail-event" style="font-size:11px;color:var(--muted);margin-left:6px;">—</span>
-
-        <div style="font-size:10px;color:var(--muted);margin:8px 0 3px;">SIGNATURE CHAIN PROGRESS</div>
-        <div class="chain-bar" id="chain-dots"></div>
-        <div class="chain-desc" id="chain-desc">—</div>
-
-        <div style="font-size:10px;color:var(--muted);margin-bottom:3px;">CONVERGENCE CONFIDENCE</div>
-        <div class="conf-bar-wrap">
-          <div class="conf-bar-fill" id="conf-bar" style="width:0%"></div>
-        </div>
-        <div style="font-size:11px;color:var(--red);margin-bottom:8px;" id="conf-label">0%</div>
-
-        <div class="metrics-grid">
-          <div class="metric-box">
-            <div class="label">SST vs baseline</div>
-            <div class="value" id="sst-delta">—</div>
-          </div>
-          <div class="metric-box">
-            <div class="label">Trajectory</div>
-            <div class="value" id="trajectory">—</div>
-          </div>
-          <div class="metric-box">
-            <div class="label">Priority score</div>
-            <div class="value" id="priority-val">—</div>
-          </div>
-          <div class="metric-box">
-            <div class="label">Event type</div>
-            <div class="value" id="event-type">—</div>
-          </div>
-        </div>
-
-        <div style="font-size:10px;color:var(--muted);margin-bottom:3px;">SST TIME-SERIES — LAST 30 DAYS</div>
-        <canvas id="sst-chart" height="75"></canvas>
-
-        <div style="font-size:10px;color:var(--muted);margin:8px 0 3px;">RECOMMENDED ACTION</div>
-        <div id="rec-action" style="font-size:11px;color:var(--teal-l);line-height:1.4;">—</div>
-
-        <div class="feedback-row">
-          <button class="btn btn-confirm" onclick="sendFeedback('confirm')">Confirm</button>
-          <button class="btn btn-fp" onclick="sendFeedback('false_positive')">False positive</button>
-        </div>
+      <div id="left-footer">
+        <div class="footer-label">Agency</div>
+        <div class="footer-val" id="footer-agency">—</div>
+        <div class="footer-label" style="margin-top:6px;">Role</div>
+        <div class="footer-val" id="footer-role">—</div>
+        <div class="footer-label" style="margin-top:6px;">Data sources</div>
+        <div class="footer-val">NASA MUR SST · Copernicus Chl-a</div>
+        <div class="footer-label" style="margin-top:6px;">Update cycle</div>
+        <div class="footer-val">Every 30 seconds</div>
       </div>
     </div>
 
-    <div id="chat-section">
-      <h4>Ask AIRAVAT</h4>
-      <div id="chat-messages">Ask about any zone...</div>
-      <div class="chat-row">
-        <input id="chat-input" type="text"
-               placeholder="What needs attention?"
-               onkeydown="if(event.key==='Enter') sendQuery()"/>
-        <button id="chat-send" onclick="sendQuery()">Send</button>
+    <div id="map"></div>
+
+    <div id="right-panel">
+      <div id="zone-detail">
+        <div id="detail-placeholder" style="color:var(--muted);font-size:12px;text-align:center;padding:20px 0;">
+          ◈ Select a zone on the map<br/>
+          <span style="font-size:10px;">Click any marker to view its<br/>signature chain and confidence score</span>
+        </div>
+        <div id="detail-content" style="display:none">
+          <h3 id="detail-name">—</h3>
+          <span id="detail-badge" class="alert-badge">—</span>
+          <span id="detail-event" style="font-size:11px;color:var(--muted);margin-left:6px;">—</span>
+
+          <div style="font-size:10px;color:var(--muted);margin:8px 0 3px;">SIGNATURE CHAIN PROGRESS</div>
+          <div class="chain-bar" id="chain-dots"></div>
+          <div class="chain-desc" id="chain-desc">—</div>
+
+          <div style="font-size:10px;color:var(--muted);margin-bottom:3px;">CONVERGENCE CONFIDENCE</div>
+          <div class="conf-bar-wrap">
+            <div class="conf-bar-fill" id="conf-bar" style="width:0%"></div>
+          </div>
+          <div style="font-size:11px;color:var(--red);margin-bottom:8px;" id="conf-label">0%</div>
+
+          <div class="metrics-grid">
+            <div class="metric-box">
+              <div class="label">SST vs baseline</div>
+              <div class="value" id="sst-delta">—</div>
+            </div>
+            <div class="metric-box">
+              <div class="label">Trajectory</div>
+              <div class="value" id="trajectory">—</div>
+            </div>
+            <div class="metric-box">
+              <div class="label">Priority score</div>
+              <div class="value" id="priority-val">—</div>
+            </div>
+            <div class="metric-box">
+              <div class="label">Event type</div>
+              <div class="value" id="event-type">—</div>
+            </div>
+          </div>
+
+          <div style="font-size:10px;color:var(--muted);margin-bottom:3px;">SST TIME-SERIES — LAST 30 DAYS</div>
+          <canvas id="sst-chart" height="75"></canvas>
+
+          <div style="font-size:10px;color:var(--muted);margin:8px 0 3px;">RECOMMENDED ACTION</div>
+          <div id="rec-action" style="font-size:11px;color:var(--teal-l);line-height:1.4;">—</div>
+
+          <div class="feedback-row">
+            <button class="btn btn-confirm" onclick="sendFeedback('confirm')">Confirm</button>
+            <button class="btn btn-fp" onclick="sendFeedback('false_positive')">False positive</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="chat-section">
+        <h4>Ask AIRAVAT</h4>
+        <div id="chat-messages">Ask about any zone...</div>
+        <div class="chat-row">
+          <input id="chat-input" type="text"
+                 placeholder="What needs attention?"
+                 onkeydown="if(event.key==='Enter') sendQuery()"/>
+          <button id="chat-send" onclick="sendQuery()">Send</button>
+        </div>
       </div>
     </div>
-
   </div>
 </div>
 

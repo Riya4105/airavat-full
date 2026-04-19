@@ -1,17 +1,107 @@
-// app.js � AIRAVAT 3.0 Full Product Frontend
+// app.js — AIRAVAT 3.0 Full Product Frontend
 
 const API = "https://airavat-full.onrender.com";
 
 let map, markers = {}, selectedZone = null;
 let sstChart = null, simulationRunning = false;
-let allZoneData = [];
+let allZoneData = [], assignedZones = [];
+let authToken = null, currentAgency = null;
 
 const COLOURS = { HIGH: "#EF4444", WARN: "#F97316", NORMAL: "#6B7280" };
 
+const ZONE_CENTRES = {
+  Z1: [20.0, 60.0], Z2: [24.5, 60.5], Z3: [11.5, 74.5],
+  Z4: [18.5, 86.0], Z5: [8.5, 81.5],  Z6: [11.5, 76.0], Z7: [12.0, 97.0]
+};
+
+// ── Login ──────────────────────────────────────────────────
+function fillLogin(user, pass) {
+  document.getElementById("login-username").value = user;
+  document.getElementById("login-password").value = pass;
+}
+
+async function doLogin() {
+  const username = document.getElementById("login-username").value.trim();
+  const password = document.getElementById("login-password").value.trim();
+  const errEl = document.getElementById("login-error");
+  const btn = document.getElementById("login-btn");
+
+  if (!username || !password) {
+    errEl.textContent = "Please enter agency ID and password";
+    return;
+  }
+
+  btn.textContent = "Connecting...";
+  btn.disabled = true;
+  errEl.textContent = "";
+
+  try {
+    const res = await fetch(`${API}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || "Login failed");
+    }
+
+    const data = await res.json();
+    authToken = data.access_token;
+    currentAgency = { name: data.agency, zones: data.zones, role: data.role };
+    assignedZones = data.zones;
+
+    // Update UI with agency info
+    document.getElementById("agency-badge").textContent =
+      `${currentAgency.name} · ${currentAgency.role.toUpperCase()}`;
+    document.getElementById("footer-agency").textContent = currentAgency.name;
+    document.getElementById("footer-role").textContent = currentAgency.role.toUpperCase();
+
+    // Hide login, show app
+    document.getElementById("login-screen").style.display = "none";
+    const app = document.getElementById("app");
+    app.style.display = "flex";
+
+    // Boot the map and data
+    initMap();
+    loadZones();
+    loadFeedbackStats();
+    setInterval(loadZones, 30000);
+    setInterval(loadFeedbackStats, 30000);
+
+  } catch (e) {
+    errEl.textContent = e.message || "Login failed — check credentials";
+    btn.textContent = "Access Sentinel";
+    btn.disabled = false;
+  }
+}
+
+function doLogout() {
+  authToken = null;
+  currentAgency = null;
+  assignedZones = [];
+  allZoneData = [];
+  markers = {};
+  selectedZone = null;
+
+  document.getElementById("login-screen").style.display = "flex";
+  document.getElementById("app").style.display = "none";
+  document.getElementById("login-username").value = "";
+  document.getElementById("login-password").value = "";
+  document.getElementById("login-error").textContent = "";
+  document.getElementById("login-btn").textContent = "Access Sentinel";
+  document.getElementById("login-btn").disabled = false;
+
+  if (map) { map.remove(); map = null; }
+  if (sstChart) { sstChart.destroy(); sstChart = null; }
+}
+
+// ── Map ────────────────────────────────────────────────────
 function initMap() {
   map = L.map("map", { center: [15, 75], zoom: 5 });
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-    attribution: "� CARTO � OpenStreetMap", maxZoom: 18
+    attribution: "© CARTO © OpenStreetMap", maxZoom: 18
   }).addTo(map);
 }
 
@@ -25,17 +115,17 @@ function makeIcon(alertLevel, chainPos, chainTotal) {
   return L.divIcon({ html: svg, className: "", iconSize: [44, 44], iconAnchor: [22, 22] });
 }
 
-const ZONE_CENTRES = {
-  Z1: [20.0, 60.0], Z2: [24.5, 60.5], Z3: [11.5, 74.5],
-  Z4: [18.5, 86.0], Z5: [8.5, 81.5],  Z6: [11.5, 76.0], Z7: [12.0, 97.0]
-};
-
+// ── Load zones ─────────────────────────────────────────────
 async function loadZones() {
   try {
     const res = await fetch(`${API}/zones`);
     const data = await res.json();
-    allZoneData = data.zones;
+
+    // Filter to only assigned zones
+    allZoneData = data.zones.filter(z => assignedZones.includes(z.zone_id));
+
     document.getElementById("last-updated").textContent = new Date().toLocaleTimeString();
+
     allZoneData.forEach(z => {
       const pos = ZONE_CENTRES[z.zone_id];
       if (!pos) return;
@@ -48,11 +138,13 @@ async function loadZones() {
         markers[z.zone_id] = m;
       }
     });
+
     renderLeaderboard(allZoneData);
     if (selectedZone) selectZone(selectedZone);
   } catch (e) { console.error("Failed to load zones:", e); }
 }
 
+// ── Leaderboard ────────────────────────────────────────────
 function renderLeaderboard(zones) {
   document.getElementById("zone-list").innerHTML = zones.map((z, i) => `
     <div class="zone-row ${selectedZone === z.zone_id ? 'selected' : ''}" onclick="selectZone('${z.zone_id}')">
@@ -63,12 +155,14 @@ function renderLeaderboard(zones) {
     </div>`).join("");
 }
 
+// ── Zone detail ────────────────────────────────────────────
 async function selectZone(zoneId) {
   selectedZone = zoneId;
   renderLeaderboard(allZoneData);
   try {
     const res = await fetch(`${API}/zones/${zoneId}`);
     const z = await res.json();
+
     document.getElementById("detail-placeholder").style.display = "none";
     document.getElementById("detail-content").style.display = "block";
     document.getElementById("detail-name").textContent = z.zone_name;
@@ -76,6 +170,7 @@ async function selectZone(zoneId) {
     badge.textContent = z.alert_level;
     badge.className = `alert-badge ${z.alert_level}`;
     document.getElementById("detail-event").textContent = z.best_match.replace(/_/g, " ");
+
     const dots = document.getElementById("chain-dots");
     dots.innerHTML = "";
     for (let i = 0; i < z.chain_total; i++) {
@@ -86,9 +181,11 @@ async function selectZone(zoneId) {
       dots.appendChild(d);
     }
     document.getElementById("chain-desc").textContent = z.chain_description;
+
     const pct = Math.round(z.confidence * 100);
     document.getElementById("conf-bar").style.width = `${pct}%`;
     document.getElementById("conf-label").textContent = `${pct}% convergence confidence`;
+
     const baseline = await fetch(`${API}/baseline`).then(r => r.json());
     const b = baseline.baselines.find(b => b.zone_id === zoneId);
     const delta = b ? (z.latest_sst - b.mean_sst).toFixed(2) : "0";
@@ -98,6 +195,7 @@ async function selectZone(zoneId) {
       : '<span style="color:#60A5FA">Stable</span>';
     document.getElementById("priority-val").textContent = `${Math.round(z.priority * 100)} / 100`;
     document.getElementById("event-type").textContent = z.best_match.replace(/_/g, " ");
+
     const actions = {
       thermal_stress:  "URGENT: Thermal stress detected. Dispatch response team.",
       hypoxic_bloom:   "Monitor closely. Hypoxic bloom forming. Increase sampling.",
@@ -111,6 +209,7 @@ async function selectZone(zoneId) {
   } catch (e) { console.error("Zone detail error:", e); }
 }
 
+// ── SST Chart ──────────────────────────────────────────────
 async function renderSSTChart(zoneId) {
   try {
     const res = await fetch(`${API}/history/${zoneId}?days=30`);
@@ -134,6 +233,7 @@ async function renderSSTChart(zoneId) {
   } catch (e) { console.error("Chart error:", e); }
 }
 
+// ── Feedback ───────────────────────────────────────────────
 async function sendFeedback(type) {
   if (!selectedZone) return;
   const z = allZoneData.find(z => z.zone_id === selectedZone);
@@ -157,6 +257,7 @@ async function loadFeedbackStats() {
   } catch (e) {}
 }
 
+// ── Chat ───────────────────────────────────────────────────
 async function sendQuery() {
   const input = document.getElementById("chat-input");
   const q = input.value.trim();
@@ -187,6 +288,7 @@ function addChatMessage(role, text) {
   box.scrollTop = box.scrollHeight;
 }
 
+// ── Simulate ───────────────────────────────────────────────
 function toggleSimulate() {
   const btn = document.getElementById("simulate-btn");
   if (simulationRunning) {
@@ -224,43 +326,5 @@ function toggleSimulate() {
   }, 1000);
 }
 
-function connectWebSocket() {
-  const wsUrl = API.replace("https://", "wss://").replace("http://", "ws://") + "/ws";
-  const ws = new WebSocket(wsUrl);
-  ws.onopen = () => {
-    document.getElementById("last-updated").textContent = "Live - " + new Date().toLocaleTimeString();
-    const ping = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) ws.send("ping");
-      else clearInterval(ping);
-    }, 20000);
-  };
-  ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    if (data.type === "zone_update") {
-      allZoneData = data.zones;
-      document.getElementById("last-updated").textContent = "Live - " + new Date().toLocaleTimeString();
-      allZoneData.forEach(z => {
-        const pos = ZONE_CENTRES[z.zone_id];
-        if (!pos) return;
-        const icon = makeIcon(z.alert_level, z.chain_position, z.chain_total);
-        if (markers[z.zone_id]) markers[z.zone_id].setIcon(icon);
-        else { const m = L.marker(pos, { icon }).addTo(map); m.on("click", () => selectZone(z.zone_id)); markers[z.zone_id] = m; }
-      });
-      renderLeaderboard(allZoneData);
-      if (selectedZone) selectZone(selectedZone);
-    }
-  };
-  ws.onclose = () => { document.getElementById("last-updated").textContent = "Reconnecting..."; setTimeout(connectWebSocket, 5000); };
-  ws.onerror = () => ws.close();
-}
-
-initMap();
-loadFeedbackStats();
-if (API.includes("127.0.0.1") || API.includes("localhost")) {
-  loadZones();
-  connectWebSocket();
-} else {
-  loadZones();
-  setInterval(loadZones, 30000);
-}
-setInterval(loadFeedbackStats, 30000);
+// ── Boot — show login screen first ────────────────────────
+// Nothing auto-starts — waits for login
