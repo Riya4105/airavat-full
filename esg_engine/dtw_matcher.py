@@ -160,7 +160,7 @@ def run_dtw_for_zone(zone_id):
     """
     conn = get_db()
 
-    obs = get_recent_observations(conn, zone_id, days=14)
+    obs = get_recent_observations(conn, zone_id, days=30)
     baseline = get_zone_baseline(conn, zone_id)
 
     if not obs or not baseline or len(obs) < 3:
