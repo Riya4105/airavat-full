@@ -5,7 +5,8 @@ const API = "https://airavat-full.onrender.com";
 let map, markers = {}, selectedZone = null;
 let sstChart = null, simulationRunning = false;
 let allZoneData = [], assignedZones = [];
-let authToken = null, currentAgency = null;
+let authToken = null, currentAgency = null, cachedBaselines = null;
+const zoneCache = {};
 
 const COLOURS = { HIGH: "#EF4444", WARN: "#F97316", NORMAL: "#6B7280" };
 
@@ -13,6 +14,15 @@ const ZONE_CENTRES = {
   Z1: [20.0, 60.0], Z2: [24.5, 60.5], Z3: [11.5, 74.5],
   Z4: [18.5, 86.0], Z5: [8.5, 81.5],  Z6: [11.5, 76.0], Z7: [12.0, 97.0]
 };
+
+// ── Prefetch ───────────────────────────────────────────────
+function prefetchZone(zoneId) {
+  if (zoneCache[zoneId]) return;
+  fetch(`${API}/history/${zoneId}?days=30`)
+    .then(r => r.json())
+    .then(data => { zoneCache[zoneId] = data; })
+    .catch(() => {});
+}
 
 // ── Login ──────────────────────────────────────────────────
 function fillLogin(user, pass) {
@@ -35,6 +45,12 @@ async function doLogin() {
   btn.disabled = true;
   errEl.textContent = "";
 
+  // Pre-warm API and cache baselines silently
+  fetch(`${API}/baseline`)
+    .then(r => r.json())
+    .then(data => { cachedBaselines = data; })
+    .catch(() => {});
+
   try {
     const res = await fetch(`${API}/auth/login`, {
       method: "POST",
@@ -52,18 +68,15 @@ async function doLogin() {
     currentAgency = { name: data.agency, zones: data.zones, role: data.role };
     assignedZones = data.zones;
 
-    // Update UI with agency info
     document.getElementById("agency-badge").textContent =
       `${currentAgency.name} · ${currentAgency.role.toUpperCase()}`;
     document.getElementById("footer-agency").textContent = currentAgency.name;
     document.getElementById("footer-role").textContent = currentAgency.role.toUpperCase();
 
-    // Hide login, show app
     document.getElementById("login-screen").style.display = "none";
     const app = document.getElementById("app");
     app.style.display = "flex";
 
-    // Boot the map and data
     initMap();
     loadZones();
     loadFeedbackStats();
@@ -82,8 +95,26 @@ function doLogout() {
   currentAgency = null;
   assignedZones = [];
   allZoneData = [];
-  markers = {};
   selectedZone = null;
+  cachedBaselines = null;
+  Object.keys(zoneCache).forEach(k => delete zoneCache[k]);
+
+  if (map) {
+    Object.values(markers).forEach(m => map.removeLayer(m));
+    markers = {};
+    map.remove();
+    map = null;
+  }
+
+  if (sstChart) { sstChart.destroy(); sstChart = null; }
+
+  document.getElementById("zone-list").innerHTML = "Loading...";
+  document.getElementById("detail-placeholder").style.display = "block";
+  document.getElementById("detail-content").style.display = "none";
+  document.getElementById("chat-messages").innerHTML = "Ask about any zone...";
+  document.getElementById("tp").textContent = "0";
+  document.getElementById("fp").textContent = "0";
+  document.getElementById("acc").textContent = "—";
 
   document.getElementById("login-screen").style.display = "flex";
   document.getElementById("app").style.display = "none";
@@ -92,9 +123,6 @@ function doLogout() {
   document.getElementById("login-error").textContent = "";
   document.getElementById("login-btn").textContent = "Access Sentinel";
   document.getElementById("login-btn").disabled = false;
-
-  if (map) { map.remove(); map = null; }
-  if (sstChart) { sstChart.destroy(); sstChart = null; }
 }
 
 // ── Map ────────────────────────────────────────────────────
@@ -120,10 +148,7 @@ async function loadZones() {
   try {
     const res = await fetch(`${API}/zones`);
     const data = await res.json();
-
-    // Filter to only assigned zones
     allZoneData = data.zones.filter(z => assignedZones.includes(z.zone_id));
-
     document.getElementById("last-updated").textContent = new Date().toLocaleTimeString();
 
     allZoneData.forEach(z => {
@@ -147,7 +172,9 @@ async function loadZones() {
 // ── Leaderboard ────────────────────────────────────────────
 function renderLeaderboard(zones) {
   document.getElementById("zone-list").innerHTML = zones.map((z, i) => `
-    <div class="zone-row ${selectedZone === z.zone_id ? 'selected' : ''}" onclick="selectZone('${z.zone_id}')">
+    <div class="zone-row ${selectedZone === z.zone_id ? 'selected' : ''}"
+         onclick="selectZone('${z.zone_id}')"
+         onmouseenter="prefetchZone('${z.zone_id}')">
       <span class="zone-rank">${i + 1}</span>
       <span class="dot ${z.alert_level.toLowerCase()}"></span>
       <span class="zone-name-label">${z.zone_name}</span>
@@ -186,8 +213,10 @@ async function selectZone(zoneId) {
     document.getElementById("conf-bar").style.width = `${pct}%`;
     document.getElementById("conf-label").textContent = `${pct}% convergence confidence`;
 
-    const baseline = await fetch(`${API}/baseline`).then(r => r.json());
-    const b = baseline.baselines.find(b => b.zone_id === zoneId);
+    if (!cachedBaselines) {
+      cachedBaselines = await fetch(`${API}/baseline`).then(r => r.json());
+    }
+    const b = cachedBaselines.baselines.find(b => b.zone_id === zoneId);
     const delta = b ? (z.latest_sst - b.mean_sst).toFixed(2) : "0";
     document.getElementById("sst-delta").textContent = `${delta > 0 ? "+" : ""}${delta}C`;
     document.getElementById("trajectory").innerHTML = z.slope_score > 0.5
@@ -205,15 +234,25 @@ async function selectZone(zoneId) {
       normal:          "Zone within normal parameters. Routine monitoring."
     };
     document.getElementById("rec-action").textContent = actions[z.best_match] || "Monitor zone.";
-    await renderSSTChart(zoneId);
+
+    const chartEl = document.getElementById("sst-chart");
+    chartEl.style.opacity = "0.3";
+    renderSSTChart(zoneId).then(() => { chartEl.style.opacity = "1"; });
+
   } catch (e) { console.error("Zone detail error:", e); }
 }
 
 // ── SST Chart ──────────────────────────────────────────────
 async function renderSSTChart(zoneId) {
   try {
-    const res = await fetch(`${API}/history/${zoneId}?days=30`);
-    const data = await res.json();
+    let data;
+    if (zoneCache[zoneId]) {
+      data = zoneCache[zoneId];
+    } else {
+      const res = await fetch(`${API}/history/${zoneId}?days=30`);
+      data = await res.json();
+      zoneCache[zoneId] = data;
+    }
     const obs = data.observations;
     const labels = obs.map(o => o.time.slice(5, 10));
     const sst = obs.map(o => o.sst);
@@ -326,5 +365,5 @@ function toggleSimulate() {
   }, 1000);
 }
 
-// ── Boot — show login screen first ────────────────────────
+// ── Boot ───────────────────────────────────────────────────
 // Nothing auto-starts — waits for login
