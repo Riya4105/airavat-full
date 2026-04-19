@@ -46,7 +46,7 @@
   </div>
 </div>
 
-<div id="app" style="display:none; flex-direction:column;">
+<div id="app" style="display:none;">
 
   <div id="header">
     <div>
@@ -68,25 +68,28 @@
 
   <div id="main">
 
+    <!-- LEFT SIDEBAR — Priority ranking + Ask AIRAVAT -->
     <div id="left-panel">
       <div id="leaderboard">
         <h4>Zone Priority Ranking</h4>
         <div id="zone-list">Loading...</div>
       </div>
-      <div id="left-footer">
-        <div class="footer-label">Agency</div>
-        <div class="footer-val" id="footer-agency">—</div>
-        <div class="footer-label" style="margin-top:6px;">Role</div>
-        <div class="footer-val" id="footer-role">—</div>
-        <div class="footer-label" style="margin-top:6px;">Data sources</div>
-        <div class="footer-val">NASA MUR SST · Copernicus Chl-a</div>
-        <div class="footer-label" style="margin-top:6px;">Update cycle</div>
-        <div class="footer-val">Every 30 seconds</div>
+      <div id="chat-section">
+        <h4>Ask AIRAVAT</h4>
+        <div id="chat-messages">Ask about any zone...</div>
+        <div class="chat-row">
+          <input id="chat-input" type="text"
+                 placeholder="What needs attention?"
+                 onkeydown="if(event.key==='Enter') sendQuery()"/>
+          <button id="chat-send" onclick="sendQuery()">Send</button>
+        </div>
       </div>
     </div>
 
+    <!-- MAP -->
     <div id="map"></div>
 
+    <!-- RIGHT SIDEBAR — Zone detail + footer info -->
     <div id="right-panel">
       <div id="zone-detail">
         <div id="detail-placeholder" style="color:var(--muted);font-size:12px;text-align:center;padding:20px 0;">
@@ -148,17 +151,18 @@
         </div>
       </div>
 
-      <div id="chat-section">
-        <h4>Ask AIRAVAT</h4>
-        <div id="chat-messages">Ask about any zone...</div>
-        <div class="chat-row">
-          <input id="chat-input" type="text"
-                 placeholder="What needs attention?"
-                 onkeydown="if(event.key==='Enter') sendQuery()"/>
-          <button id="chat-send" onclick="sendQuery()">Send</button>
-        </div>
+      <div id="right-footer">
+        <div class="footer-label">Agency</div>
+        <div class="footer-val" id="footer-agency">—</div>
+        <div class="footer-label" style="margin-top:5px;">Role</div>
+        <div class="footer-val" id="footer-role">—</div>
+        <div class="footer-label" style="margin-top:5px;">Data sources</div>
+        <div class="footer-val">NASA MUR SST · Copernicus Chl-a</div>
+        <div class="footer-label" style="margin-top:5px;">Update cycle</div>
+        <div class="footer-val">Every 30 seconds</div>
       </div>
     </div>
+
   </div>
 </div>
 
