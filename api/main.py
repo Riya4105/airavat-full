@@ -25,6 +25,10 @@ from esg_engine.dtw_matcher import run_all_zones, run_dtw_for_zone
 from api.models import FeedbackRequest, QueryRequest
 from config.zones import ZONES
 
+from fastapi import WebSocket, WebSocketDisconnect
+from typing import List
+import asyncio
+
 app = FastAPI(
     title="AIRAVAT 3.0",
     description="AI-Powered Marine Environmental Sentinel — Full Product API",
@@ -60,6 +64,70 @@ def get_db():
             database="airavat", user="airavat",
             password="airavat123"
         )
+    
+# ── WebSocket Connection Manager ──────────────────────────
+class ConnectionManager:
+    def __init__(self):
+        self.active: List[WebSocket] = []
+
+    async def connect(self, ws: WebSocket):
+        await ws.accept()
+        self.active.append(ws)
+
+    def disconnect(self, ws: WebSocket):
+        if ws in self.active:
+            self.active.remove(ws)
+
+    async def broadcast(self, data: dict):
+        dead = []
+        for ws in self.active:
+            try:
+                await ws.send_json(data)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect(ws)
+
+manager = ConnectionManager()
+
+# ── Background zone broadcaster ────────────────────────────
+async def broadcast_zones():
+    """Pushes zone updates to all connected clients every 30 seconds."""
+    while True:
+        try:
+            if manager.active:
+                results = run_all_zones()
+                await manager.broadcast({
+                    "type": "zone_update",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "zones": results
+                })
+        except Exception as e:
+            print(f"Broadcast error: {e}")
+        await asyncio.sleep(30)
+
+# ── Startup event ──────────────────────────────────────────
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(broadcast_zones())
+
+# ── WebSocket endpoint ─────────────────────────────────────
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        # Send current zone data immediately on connect
+        results = run_all_zones()
+        await websocket.send_json({
+            "type": "zone_update",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "zones": results
+        })
+        # Keep connection alive
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
 
 # ── GET / ─────────────────────────────────────────────────
 @app.get("/")

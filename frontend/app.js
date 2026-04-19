@@ -1,6 +1,6 @@
 // app.js — AIRAVAT 3.0 Full Product Frontend
 
-const API = "https://airavat-full-production.up.railway.app";
+const API = "http://127.0.0.1:8000";
 
 // ── State ──────────────────────────────────────────────────
 let map, markers = {}, selectedZone = null;
