@@ -258,19 +258,47 @@ def get_history(zone_id: str, days: int = 30):
 # ── Feedback ───────────────────────────────────────────────
 @app.post("/feedback")
 def post_feedback(req: FeedbackRequest):
+    """Logs operator feedback — one per zone per alert level."""
     try:
         conn = get_db()
         cur = conn.cursor()
+
+        # Check if feedback already exists for this zone + alert level
         cur.execute("""
-            INSERT INTO zone_alerts (time, zone_id, alert_level, event_type, operator_feedback)
-            VALUES (NOW(), %s, %s, %s, %s);
-        """, (req.zone_id, req.alert_level, req.event_type, req.feedback))
+            SELECT id FROM zone_alerts
+            WHERE zone_id = %s
+              AND alert_level = %s
+              AND operator_feedback IS NOT NULL
+            ORDER BY time DESC
+            LIMIT 1;
+        """, (req.zone_id, req.alert_level))
+        existing = cur.fetchone()
+
+        if existing:
+            # Update existing feedback instead of inserting new
+            cur.execute("""
+                UPDATE zone_alerts
+                SET operator_feedback = %s, time = NOW(), event_type = %s
+                WHERE id = %s;
+            """, (req.feedback, req.event_type, existing[0]))
+            action = "updated"
+        else:
+            # Insert new feedback
+            cur.execute("""
+                INSERT INTO zone_alerts
+                    (time, zone_id, alert_level, event_type, operator_feedback)
+                VALUES (NOW(), %s, %s, %s, %s);
+            """, (req.zone_id, req.alert_level, req.event_type, req.feedback))
+            action = "logged"
+
         conn.commit()
         cur.close()
         conn.close()
+
         return {
-            "status": "logged",
+            "status": action,
             "zone_id": req.zone_id,
+            "alert_level": req.alert_level,
             "feedback": req.feedback,
             "timestamp": datetime.now(timezone.utc).isoformat()
         }

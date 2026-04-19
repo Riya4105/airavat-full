@@ -240,6 +240,35 @@ async function selectZone(zoneId) {
     };
     document.getElementById("rec-action").textContent = actions[z.best_match] || "Monitor zone.";
 
+    // Check existing feedback for this zone + alert level
+    const feedbackRes = await fetch(`${API}/feedback?zone_id=${zoneId}`);
+    const feedbackData = await feedbackRes.json();
+    const existingFeedback = feedbackData.feedback.find(
+      f => f.zone_id === zoneId && f.alert_level === z.alert_level
+    );
+
+    const confirmBtn = document.querySelector(".btn-confirm");
+    const fpBtn = document.querySelector(".btn-fp");
+
+    if (existingFeedback) {
+      if (existingFeedback.feedback === "confirm") {
+        confirmBtn.style.opacity = "1";
+        confirmBtn.textContent = "✓ Confirmed";
+        fpBtn.style.opacity = "0.4";
+        fpBtn.textContent = "False positive";
+      } else {
+        fpBtn.style.opacity = "1";
+        fpBtn.textContent = "✗ False positive";
+        confirmBtn.style.opacity = "0.4";
+        confirmBtn.textContent = "Confirm";
+      }
+    } else {
+      confirmBtn.style.opacity = "1";
+      confirmBtn.textContent = "Confirm";
+      fpBtn.style.opacity = "1";
+      fpBtn.textContent = "False positive";
+    }
+
     const chartEl = document.getElementById("sst-chart");
     chartEl.style.opacity = "0.3";
     renderSSTChart(zoneId).then(() => { chartEl.style.opacity = "1"; });
@@ -280,13 +309,36 @@ async function sendFeedback(type) {
   if (!selectedZone) return;
   const z = allZoneData.find(z => z.zone_id === selectedZone);
   if (!z) return;
+
   await fetch(`${API}/feedback`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ zone_id: selectedZone, alert_level: z.alert_level, event_type: z.best_match, feedback: type })
+    body: JSON.stringify({
+      zone_id: selectedZone,
+      alert_level: z.alert_level,
+      event_type: z.best_match,
+      feedback: type
+    })
   });
+
+  // Update button states
+  const confirmBtn = document.querySelector(".btn-confirm");
+  const fpBtn = document.querySelector(".btn-fp");
+  if (type === "confirm") {
+    confirmBtn.textContent = "✓ Confirmed";
+    confirmBtn.style.opacity = "1";
+    fpBtn.textContent = "False positive";
+    fpBtn.style.opacity = "0.4";
+    addChatMessage("system", "Confirmed — chain reinforced");
+  } else {
+    fpBtn.textContent = "✗ False positive";
+    fpBtn.style.opacity = "1";
+    confirmBtn.textContent = "Confirm";
+    confirmBtn.style.opacity = "0.4";
+    addChatMessage("system", "Logged as false positive");
+  }
+
   loadFeedbackStats();
-  addChatMessage("system", type === "confirm" ? "Confirmed - chain reinforced" : "Logged as false positive");
 }
 
 async function loadFeedbackStats() {
