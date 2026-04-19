@@ -44,3 +44,17 @@ with urllib.request.urlopen(req2) as r:
     print(result2['message'])
 
 print("\n" + "=" * 55)
+
+# Test WhatsApp
+print("\nTest 2 — WhatsApp alert for Z1")
+req2 = urllib.request.Request(
+    f"{BASE}/alert/dispatch?zone_id=Z1&channel=whatsapp",
+    method="POST",
+    headers={
+        "Authorization": f"Bearer {token}",
+        "Content-Length": "0"
+    }
+)
+with urllib.request.urlopen(req2) as r:
+    result3 = json.loads(r.read())
+    print(f"Results: {result3['results']}")

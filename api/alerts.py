@@ -31,13 +31,16 @@ def send_sms(to_number: str, message: str) -> dict:
     except Exception as e:
         return {"status": "failed", "error": str(e), "to": to_number}
 
+# Twilio WhatsApp sandbox number
+WHATSAPP_FROM = os.environ.get("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
+
 def send_whatsapp(to_number: str, message: str) -> dict:
-    """Send WhatsApp message via Twilio."""
+    """Send WhatsApp message via Twilio sandbox."""
     try:
         client = Client(ACCOUNT_SID, AUTH_TOKEN)
         msg = client.messages.create(
             body=message,
-            from_=f"whatsapp:{FROM_PHONE}",
+            from_=WHATSAPP_FROM,
             to=f"whatsapp:{to_number}"
         )
         return {"status": "sent", "sid": msg.sid, "to": to_number}
