@@ -443,4 +443,6 @@ ACTION: [specific recommended action]"""
         return {"question": req.question, **parsed, "source": "groq_llama"}
 
     except Exception as e:
+        import traceback
+        print(f"Query error: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
