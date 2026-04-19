@@ -1,73 +1,45 @@
-// app.js — AIRAVAT 3.0 Full Product Frontend
+﻿// app.js — AIRAVAT 3.0 Full Product Frontend
 
 const API = "https://airavat-full-production.up.railway.app";
 
-// ── State ──────────────────────────────────────────────────
 let map, markers = {}, selectedZone = null;
 let sstChart = null, simulationRunning = false;
 let allZoneData = [];
 
-// ── Alert colours ──────────────────────────────────────────
-const COLOURS = {
-  HIGH:   "#EF4444",
-  WARN:   "#F97316",
-  NORMAL: "#6B7280"
-};
+const COLOURS = { HIGH: "#EF4444", WARN: "#F97316", NORMAL: "#6B7280" };
 
-// ── Init map ───────────────────────────────────────────────
 function initMap() {
   map = L.map("map", { center: [15, 75], zoom: 5 });
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-    attribution: "© CARTO © OpenStreetMap",
-    maxZoom: 18
+    attribution: "© CARTO © OpenStreetMap", maxZoom: 18
   }).addTo(map);
 }
 
-// ── Create zone marker ─────────────────────────────────────
 function makeIcon(alertLevel, chainPos, chainTotal) {
   const col = COLOURS[alertLevel] || COLOURS.NORMAL;
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44">
-      <circle cx="22" cy="22" r="19"
-        fill="none" stroke="${col}" stroke-width="2.5" opacity="0.35"/>
-      <circle cx="22" cy="22" r="13"
-        fill="none" stroke="${col}" stroke-width="2"/>
-      <text x="22" y="27" text-anchor="middle"
-        font-size="11" font-weight="700"
-        font-family="monospace" fill="${col}">${chainPos}/${chainTotal}</text>
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44">
+    <circle cx="22" cy="22" r="19" fill="none" stroke="${col}" stroke-width="2.5" opacity="0.35"/>
+    <circle cx="22" cy="22" r="13" fill="none" stroke="${col}" stroke-width="2"/>
+    <text x="22" y="27" text-anchor="middle" font-size="11" font-weight="700" font-family="monospace" fill="${col}">${chainPos}/${chainTotal}</text>
     </svg>`;
-  return L.divIcon({
-    html: svg, className: "", iconSize: [44, 44], iconAnchor: [22, 22]
-  });
+  return L.divIcon({ html: svg, className: "", iconSize: [44, 44], iconAnchor: [22, 22] });
 }
 
-// ── Zone centre coordinates ────────────────────────────────
 const ZONE_CENTRES = {
-  Z1: [20.0, 60.0],
-  Z2: [24.5, 60.5],
-  Z3: [11.5, 74.5],
-  Z4: [18.5, 86.0],
-  Z5: [8.5,  81.5],
-  Z6: [11.5, 76.0],
-  Z7: [12.0, 97.0]
+  Z1: [20.0, 60.0], Z2: [24.5, 60.5], Z3: [11.5, 74.5],
+  Z4: [18.5, 86.0], Z5: [8.5, 81.5],  Z6: [11.5, 76.0], Z7: [12.0, 97.0]
 };
 
-// ── Load all zones ─────────────────────────────────────────
 async function loadZones() {
   try {
-    const res  = await fetch(`${API}/zones`);
+    const res = await fetch(`${API}/zones`);
     const data = await res.json();
     allZoneData = data.zones;
-
-    document.getElementById("last-updated").textContent =
-      new Date().toLocaleTimeString();
-
-    // Update markers
+    document.getElementById("last-updated").textContent = new Date().toLocaleTimeString();
     allZoneData.forEach(z => {
       const pos = ZONE_CENTRES[z.zone_id];
       if (!pos) return;
       const icon = makeIcon(z.alert_level, z.chain_position, z.chain_total);
-
       if (markers[z.zone_id]) {
         markers[z.zone_id].setIcon(icon);
       } else {
@@ -76,63 +48,34 @@ async function loadZones() {
         markers[z.zone_id] = m;
       }
     });
-
-    // Update leaderboard
     renderLeaderboard(allZoneData);
-
-    // Refresh selected zone detail
     if (selectedZone) selectZone(selectedZone);
-
-  } catch (e) {
-    console.error("Failed to load zones:", e);
-  }
+  } catch (e) { console.error("Failed to load zones:", e); }
 }
 
-// ── Render leaderboard ─────────────────────────────────────
 function renderLeaderboard(zones) {
-  const el = document.getElementById("zone-list");
-  el.innerHTML = zones.map((z, i) => `
-    <div class="zone-row ${selectedZone === z.zone_id ? 'selected' : ''}"
-         onclick="selectZone('${z.zone_id}')">
+  document.getElementById("zone-list").innerHTML = zones.map((z, i) => `
+    <div class="zone-row ${selectedZone === z.zone_id ? 'selected' : ''}" onclick="selectZone('${z.zone_id}')">
       <span class="zone-rank">${i + 1}</span>
       <span class="dot ${z.alert_level.toLowerCase()}"></span>
       <span class="zone-name-label">${z.zone_name}</span>
       <span class="zone-score score-${z.alert_level}">${z.priority}</span>
-    </div>
-  `).join("");
+    </div>`).join("");
 }
 
-// ── Select zone ────────────────────────────────────────────
 async function selectZone(zoneId) {
   selectedZone = zoneId;
-
-  // Highlight marker
-  Object.entries(markers).forEach(([id, m]) => {
-    const z = allZoneData.find(z => z.zone_id === id);
-    if (!z) return;
-    const icon = makeIcon(z.alert_level, z.chain_position, z.chain_total);
-    m.setIcon(icon);
-  });
-
-  // Update leaderboard selection highlight
   renderLeaderboard(allZoneData);
-
   try {
-    const res  = await fetch(`${API}/zones/${zoneId}`);
-    const z    = await res.json();
-
-    // Show detail panel
+    const res = await fetch(`${API}/zones/${zoneId}`);
+    const z = await res.json();
     document.getElementById("detail-placeholder").style.display = "none";
     document.getElementById("detail-content").style.display = "block";
-
-    // Zone name + badge
     document.getElementById("detail-name").textContent = z.zone_name;
     const badge = document.getElementById("detail-badge");
-    badge.textContent  = z.alert_level;
-    badge.className    = `alert-badge ${z.alert_level}`;
+    badge.textContent = z.alert_level;
+    badge.className = `alert-badge ${z.alert_level}`;
     document.getElementById("detail-event").textContent = z.best_match.replace(/_/g, " ");
-
-    // Chain dots
     const dots = document.getElementById("chain-dots");
     dots.innerHTML = "";
     for (let i = 0; i < z.chain_total; i++) {
@@ -143,217 +86,181 @@ async function selectZone(zoneId) {
       dots.appendChild(d);
     }
     document.getElementById("chain-desc").textContent = z.chain_description;
-
-    // Confidence bar
     const pct = Math.round(z.confidence * 100);
     document.getElementById("conf-bar").style.width = `${pct}%`;
     document.getElementById("conf-label").textContent = `${pct}% convergence confidence`;
-
-    // Metrics
     const baseline = await fetch(`${API}/baseline`).then(r => r.json());
     const b = baseline.baselines.find(b => b.zone_id === zoneId);
-    const delta = b ? (z.latest_sst - b.mean_sst).toFixed(2) : "—";
-    document.getElementById("sst-delta").textContent =
-      `${delta > 0 ? "+" : ""}${delta}°C`;
-    document.getElementById("trajectory").innerHTML =
-      z.slope_score > 0.5
-        ? '<span style="color:#EF4444">↑ Rising</span>'
-        : '<span style="color:#60A5FA">→ Stable</span>';
-    document.getElementById("priority-val").textContent =
-      `${Math.round(z.priority * 100)} / 100`;
-    document.getElementById("event-type").textContent =
-      z.best_match.replace(/_/g, " ");
-
-    // Recommended action
+    const delta = b ? (z.latest_sst - b.mean_sst).toFixed(2) : "0";
+    document.getElementById("sst-delta").textContent = `${delta > 0 ? "+" : ""}${delta}C`;
+    document.getElementById("trajectory").innerHTML = z.slope_score > 0.5
+      ? '<span style="color:#EF4444">Rising</span>'
+      : '<span style="color:#60A5FA">Stable</span>';
+    document.getElementById("priority-val").textContent = `${Math.round(z.priority * 100)} / 100`;
+    document.getElementById("event-type").textContent = z.best_match.replace(/_/g, " ");
     const actions = {
-      thermal_stress: "URGENT: Thermal stress detected. Dispatch response team. Alert coastal fisheries.",
-      hypoxic_bloom:  "Monitor closely. Hypoxic bloom forming. Increase sampling frequency.",
-      turbidity_spike:"Investigate turbidity source. Check for runoff or algal influx.",
-      upwelling:      "Upwelling event in progress. Fisheries opportunity — high productivity zone.",
-      oil_slick:      "Oil slick precursor detected. Alert coast guard. Increase monitoring.",
-      normal:         "Zone within normal parameters. Continue routine monitoring."
+      thermal_stress:  "URGENT: Thermal stress detected. Dispatch response team.",
+      hypoxic_bloom:   "Monitor closely. Hypoxic bloom forming. Increase sampling.",
+      turbidity_spike: "Investigate turbidity source. Check for runoff.",
+      upwelling:       "Upwelling in progress. High productivity zone.",
+      oil_slick:       "Oil slick precursor. Alert coast guard immediately.",
+      normal:          "Zone within normal parameters. Routine monitoring."
     };
-    document.getElementById("rec-action").textContent =
-      actions[z.best_match] || "Monitor zone closely.";
-
-    // SST chart
-    await renderSSTChart(zoneId, z.chain_position);
-
-  } catch (e) {
-    console.error("Zone detail error:", e);
-  }
+    document.getElementById("rec-action").textContent = actions[z.best_match] || "Monitor zone.";
+    await renderSSTChart(zoneId);
+  } catch (e) { console.error("Zone detail error:", e); }
 }
 
-// ── SST chart ──────────────────────────────────────────────
-async function renderSSTChart(zoneId, chainPos) {
+async function renderSSTChart(zoneId) {
   try {
-    const res  = await fetch(`${API}/history/${zoneId}?days=14`);
+    const res = await fetch(`${API}/history/${zoneId}?days=30`);
     const data = await res.json();
-    const obs  = data.observations;
-
+    const obs = data.observations;
     const labels = obs.map(o => o.time.slice(5, 10));
-    const sst    = obs.map(o => o.sst);
-
+    const sst = obs.map(o => o.sst);
     if (sstChart) sstChart.destroy();
-
     const ctx = document.getElementById("sst-chart").getContext("2d");
-    sstChart  = new Chart(ctx, {
+    sstChart = new Chart(ctx, {
       type: "line",
-      data: {
-        labels,
-        datasets: [{
-          data: sst,
-          borderColor: "#EF4444",
-          backgroundColor: "rgba(239,68,68,0.08)",
-          borderWidth: 1.5,
-          pointRadius: 2,
-          tension: 0.3,
-          fill: true
-        }]
-      },
-      options: {
-        responsive: true,
-        plugins: { legend: { display: false } },
+      data: { labels, datasets: [{ data: sst, borderColor: "#EF4444",
+        backgroundColor: "rgba(239,68,68,0.08)", borderWidth: 1.5,
+        pointRadius: 2, tension: 0.3, fill: true }] },
+      options: { responsive: true, plugins: { legend: { display: false } },
         scales: {
-          x: {
-            ticks: { color: "#8B949E", font: { size: 9 } },
-            grid:  { color: "#21262D" }
-          },
-          y: {
-            ticks: { color: "#8B949E", font: { size: 9 } },
-            grid:  { color: "#21262D" }
-          }
-        }
-      }
+          x: { ticks: { color: "#8B949E", font: { size: 9 } }, grid: { color: "#21262D" } },
+          y: { ticks: { color: "#8B949E", font: { size: 9 } }, grid: { color: "#21262D" } }
+        }}
     });
-  } catch (e) {
-    console.error("Chart error:", e);
-  }
+  } catch (e) { console.error("Chart error:", e); }
 }
 
-// ── Feedback ───────────────────────────────────────────────
 async function sendFeedback(type) {
   if (!selectedZone) return;
   const z = allZoneData.find(z => z.zone_id === selectedZone);
   if (!z) return;
-
   await fetch(`${API}/feedback`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      zone_id:     selectedZone,
-      alert_level: z.alert_level,
-      event_type:  z.best_match,
-      feedback:    type
-    })
+    body: JSON.stringify({ zone_id: selectedZone, alert_level: z.alert_level, event_type: z.best_match, feedback: type })
   });
-
   loadFeedbackStats();
-  const msg = type === "confirm" ? "✓ Confirmed — chain reinforced" : "✗ Logged as false positive";
-  addChatMessage("system", msg);
+  addChatMessage("system", type === "confirm" ? "Confirmed - chain reinforced" : "Logged as false positive");
 }
 
-// ── Feedback stats ─────────────────────────────────────────
 async function loadFeedbackStats() {
   try {
-    const res  = await fetch(`${API}/feedback`);
+    const res = await fetch(`${API}/feedback`);
     const data = await res.json();
-    document.getElementById("tp").textContent  = data.true_positives;
-    document.getElementById("fp").textContent  = data.false_positives;
-    document.getElementById("acc").textContent =
-      data.total > 0 ? `${Math.round(data.accuracy * 100)}%` : "—";
+    document.getElementById("tp").textContent = data.true_positives;
+    document.getElementById("fp").textContent = data.false_positives;
+    document.getElementById("acc").textContent = data.total > 0 ? `${Math.round(data.accuracy * 100)}%` : "-";
   } catch (e) {}
 }
 
-// ── Chat / NL query ────────────────────────────────────────
 async function sendQuery() {
   const input = document.getElementById("chat-input");
-  const q     = input.value.trim();
+  const q = input.value.trim();
   if (!q) return;
-
   input.value = "";
   addChatMessage("user", q);
-
   try {
-    const res  = await fetch(`${API}/query`, {
+    const res = await fetch(`${API}/query`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question: q, zone_id: selectedZone })
     });
     const data = await res.json();
-
     const reply = [
-      data.severity   ? `Severity: ${data.severity}`     : "",
-      data.chain_state? `Chain: ${data.chain_state}`      : "",
-      data.explanation? data.explanation                   : "",
-      data.action     ? `Action: ${data.action}`          : ""
-    ].filter(Boolean).join("\n");
-
+      data.severity ? `Severity: ${data.severity}` : "",
+      data.chain_state ? `Chain: ${data.chain_state}` : "",
+      data.explanation || "",
+      data.action ? `Action: ${data.action}` : ""
+    ].filter(Boolean).join(" | ");
     addChatMessage("ai", reply);
-  } catch (e) {
-    addChatMessage("ai", "Error connecting to AIRAVAT intelligence layer.");
-  }
+  } catch (e) { addChatMessage("ai", "Error connecting to AIRAVAT."); }
 }
 
 function addChatMessage(role, text) {
   const box = document.getElementById("chat-messages");
   const col = role === "user" ? "#9FE1CB" : "#E6EDF3";
   box.innerHTML += `<div style="color:${col};margin-bottom:4px;">${text}</div>`;
-  box.scrollTop  = box.scrollHeight;
+  box.scrollTop = box.scrollHeight;
 }
 
-// ── Simulate ───────────────────────────────────────────────
 function toggleSimulate() {
   const btn = document.getElementById("simulate-btn");
   if (simulationRunning) {
     simulationRunning = false;
-    btn.textContent   = "▶ Simulate 8-day progression";
+    btn.textContent = "Simulate 8-day progression";
     btn.classList.remove("running");
     loadZones();
     return;
   }
-
   simulationRunning = true;
-  btn.textContent   = "■ Stop simulation";
+  btn.textContent = "Stop simulation";
   btn.classList.add("running");
-
   let step = 0;
-  const sim = setInterval(async () => {
+  const sim = setInterval(() => {
     if (!simulationRunning || step >= 8) {
       clearInterval(sim);
       simulationRunning = false;
-      btn.textContent   = "▶ Simulate 8-day progression";
+      btn.textContent = "Simulate 8-day progression";
       btn.classList.remove("running");
       loadZones();
       return;
     }
-
-    // Advance each zone marker one step
     allZoneData = allZoneData.map(z => ({
       ...z,
       chain_position: Math.min(z.chain_position + 1, z.chain_total),
       priority: Math.min(z.priority + 0.04, 1.0),
-      alert_level: z.priority + 0.04 >= 0.55 ? "HIGH"
-                 : z.priority + 0.04 >= 0.35 ? "WARN" : "NORMAL"
+      alert_level: z.priority + 0.04 >= 0.55 ? "HIGH" : z.priority + 0.04 >= 0.35 ? "WARN" : "NORMAL"
     }));
-
     allZoneData.forEach(z => {
       if (!markers[z.zone_id]) return;
-      markers[z.zone_id].setIcon(
-        makeIcon(z.alert_level, z.chain_position, z.chain_total)
-      );
+      markers[z.zone_id].setIcon(makeIcon(z.alert_level, z.chain_position, z.chain_total));
     });
-
     renderLeaderboard(allZoneData);
     step++;
   }, 1000);
 }
 
-// ── Boot ───────────────────────────────────────────────────
-initMap();
-loadZones();
-loadFeedbackStats();
+function connectWebSocket() {
+  const wsUrl = API.replace("https://", "wss://").replace("http://", "ws://") + "/ws";
+  const ws = new WebSocket(wsUrl);
+  ws.onopen = () => {
+    document.getElementById("last-updated").textContent = "Live - " + new Date().toLocaleTimeString();
+    const ping = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) ws.send("ping");
+      else clearInterval(ping);
+    }, 20000);
+  };
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === "zone_update") {
+      allZoneData = data.zones;
+      document.getElementById("last-updated").textContent = "Live - " + new Date().toLocaleTimeString();
+      allZoneData.forEach(z => {
+        const pos = ZONE_CENTRES[z.zone_id];
+        if (!pos) return;
+        const icon = makeIcon(z.alert_level, z.chain_position, z.chain_total);
+        if (markers[z.zone_id]) markers[z.zone_id].setIcon(icon);
+        else { const m = L.marker(pos, { icon }).addTo(map); m.on("click", () => selectZone(z.zone_id)); markers[z.zone_id] = m; }
+      });
+      renderLeaderboard(allZoneData);
+      if (selectedZone) selectZone(selectedZone);
+    }
+  };
+  ws.onclose = () => { document.getElementById("last-updated").textContent = "Reconnecting..."; setTimeout(connectWebSocket, 5000); };
+  ws.onerror = () => ws.close();
+}
 
-// Auto-refresh every 60 seconds
-setInterval(loadZones, 60000);
+initMap();
+loadFeedbackStats();
+if (API.includes("127.0.0.1") || API.includes("localhost")) {
+  loadZones();
+  connectWebSocket();
+} else {
+  loadZones();
+  setInterval(loadZones, 30000);
+}
 setInterval(loadFeedbackStats, 30000);

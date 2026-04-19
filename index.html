@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
@@ -11,7 +11,6 @@
 </head>
 <body>
 
-<!-- Header -->
 <div id="header">
   <div>
     <h1>AIRAVAT 3.0 — Environmental Sentinel</h1>
@@ -26,16 +25,13 @@
   <button id="simulate-btn" onclick="toggleSimulate()">▶ Simulate 8-day progression</button>
 </div>
 
-<!-- Main -->
 <div id="main">
   <div id="map"></div>
 
-  <!-- Right panel -->
   <div id="panel">
 
-    <!-- Zone detail -->
     <div id="zone-detail">
-      <div id="detail-placeholder" style="color:var(--muted);font-size:12px;text-align:center;padding:20px 0;">
+      <div id="detail-placeholder" style="color:var(--muted);font-size:12px;text-align:center;padding:16px 0;">
         ◈ Select a zone on the map
       </div>
       <div id="detail-content" style="display:none">
@@ -43,15 +39,15 @@
         <span id="detail-badge" class="alert-badge">—</span>
         <span id="detail-event" style="font-size:11px;color:var(--muted);margin-left:6px;">—</span>
 
-        <div style="font-size:10px;color:var(--muted);margin:6px 0 3px;">SIGNATURE CHAIN PROGRESS</div>
+        <div style="font-size:10px;color:var(--muted);margin:5px 0 2px;">SIGNATURE CHAIN PROGRESS</div>
         <div class="chain-bar" id="chain-dots"></div>
         <div class="chain-desc" id="chain-desc">—</div>
 
-        <div style="font-size:10px;color:var(--muted);margin-bottom:4px;">CONVERGENCE CONFIDENCE</div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:3px;">CONVERGENCE CONFIDENCE</div>
         <div class="conf-bar-wrap">
           <div class="conf-bar-fill" id="conf-bar" style="width:0%"></div>
         </div>
-        <div style="font-size:11px;color:var(--red);margin-bottom:8px;" id="conf-label">0%</div>
+        <div style="font-size:11px;color:var(--red);margin-bottom:6px;" id="conf-label">0%</div>
 
         <div class="metrics-grid">
           <div class="metric-box">
@@ -73,13 +69,11 @@
         </div>
 
         <div id="sst-chart-wrap">
-          <div style="font-size:10px;color:var(--muted);margin-bottom:4px;">
-            SST TIME-SERIES (°C) — LAST 14 DAYS
-          </div>
-          <canvas id="sst-chart" height="90"></canvas>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:3px;">SST TIME-SERIES (°C) — LAST 30 DAYS</div>
+          <canvas id="sst-chart" height="80"></canvas>
         </div>
 
-        <div style="font-size:10px;color:var(--muted);margin:8px 0 3px;">RECOMMENDED ACTION</div>
+        <div style="font-size:10px;color:var(--muted);margin:6px 0 2px;">RECOMMENDED ACTION</div>
         <div id="rec-action" style="font-size:11px;color:var(--teal-l);line-height:1.4;">—</div>
 
         <div class="feedback-row">
@@ -89,13 +83,11 @@
       </div>
     </div>
 
-    <!-- Leaderboard -->
     <div id="leaderboard">
       <h4>Zone Priority Ranking</h4>
       <div id="zone-list">Loading...</div>
     </div>
 
-    <!-- Chat -->
     <div id="chat-section">
       <h4>✦ Ask AIRAVAT</h4>
       <div id="chat-messages">Ask about any zone...</div>
