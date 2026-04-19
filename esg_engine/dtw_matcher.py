@@ -197,10 +197,22 @@ def run_dtw_for_zone(zone_id):
     # Chain position
     chain_pos, chain_desc = detect_chain_position(sst_anom, best_event)
 
-    # Historical similarity (z-score of latest SST anomaly)
+    # VAE anomaly score — replaces simple z-score baseline
     mean_sst, std_sst = baseline[0], baseline[1]
     latest_sst = obs[-1][0]
-    hist_sim = 1.0 - min(abs(latest_sst - mean_sst) / (std_sst + 0.001), 1.0)
+
+    # Try VAE first, fall back to z-score if model not available
+    try:
+        from esg_engine.vae_encoder import load_model, compute_anomaly_score
+        vae_model, vae_mean, vae_std = load_model(zone_id)
+        if vae_model is not None:
+            recent_arr = np.array([[r[0], r[1]] for r in obs], dtype=np.float32)
+            vae_score = compute_anomaly_score(vae_model, vae_mean, vae_std, recent_arr)
+            hist_sim = 1.0 - vae_score  # High anomaly = low hist_sim
+        else:
+            hist_sim = 1.0 - min(abs(latest_sst - mean_sst) / (std_sst + 0.001), 1.0)
+    except Exception:
+        hist_sim = 1.0 - min(abs(latest_sst - mean_sst) / (std_sst + 0.001), 1.0)
 
     # Slope score — is SST trending in the signature direction?
     if len(sst_anom) >= 3:
@@ -242,6 +254,7 @@ def run_dtw_for_zone(zone_id):
         "latest_sst":        obs[-1][0],
         "latest_chl":        obs[-1][1],
         "obs_count":         len(obs),
+        "vae_anomaly":       round(1.0 - hist_sim, 4),
     }
 
 def run_all_zones():
