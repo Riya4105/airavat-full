@@ -15,7 +15,6 @@ const ZONE_CENTRES = {
   Z4: [18.5, 86.0], Z5: [8.5, 81.5],  Z6: [11.5, 76.0], Z7: [12.0, 97.0]
 };
 
-// ── Prefetch ───────────────────────────────────────────────
 function prefetchZone(zoneId) {
   if (zoneCache[zoneId]) return;
   fetch(`${API}/history/${zoneId}?days=30`)
@@ -24,7 +23,6 @@ function prefetchZone(zoneId) {
     .catch(() => {});
 }
 
-// ── Login ──────────────────────────────────────────────────
 function fillLogin(user, pass) {
   document.getElementById("login-username").value = user;
   document.getElementById("login-password").value = pass;
@@ -45,7 +43,6 @@ async function doLogin() {
   btn.disabled = true;
   errEl.textContent = "";
 
-  // Pre-warm API and cache baselines silently
   fetch(`${API}/baseline`)
     .then(r => r.json())
     .then(data => { cachedBaselines = data; })
@@ -125,7 +122,6 @@ function doLogout() {
   document.getElementById("login-btn").disabled = false;
 }
 
-// ── Map ────────────────────────────────────────────────────
 function initMap() {
   map = L.map("map", { center: [15, 75], zoom: 5 });
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
@@ -143,7 +139,6 @@ function makeIcon(alertLevel, chainPos, chainTotal) {
   return L.divIcon({ html: svg, className: "", iconSize: [44, 44], iconAnchor: [22, 22] });
 }
 
-// ── Load zones ─────────────────────────────────────────────
 async function loadZones() {
   try {
     const res = await fetch(`${API}/zones`);
@@ -169,7 +164,6 @@ async function loadZones() {
   } catch (e) { console.error("Failed to load zones:", e); }
 }
 
-// ── Leaderboard ────────────────────────────────────────────
 function renderLeaderboard(zones) {
   document.getElementById("zone-list").innerHTML = zones.map((z, i) => `
     <div class="zone-row ${selectedZone === z.zone_id ? 'selected' : ''}"
@@ -182,7 +176,6 @@ function renderLeaderboard(zones) {
     </div>`).join("");
 }
 
-// ── Zone detail ────────────────────────────────────────────
 async function selectZone(zoneId) {
   selectedZone = zoneId;
   renderLeaderboard(allZoneData);
@@ -225,6 +218,18 @@ async function selectZone(zoneId) {
     document.getElementById("priority-val").textContent = `${Math.round(z.priority * 100)} / 100`;
     document.getElementById("event-type").textContent = z.best_match.replace(/_/g, " ");
 
+    // VAE anomaly score
+    const vaeEl = document.getElementById("vae-anomaly");
+    if (vaeEl && z.vae_anomaly !== undefined) {
+      vaeEl.textContent = `${Math.round(z.vae_anomaly * 100)}%`;
+      vaeEl.style.color = z.vae_anomaly > 0.7 ? "#EF4444"
+                        : z.vae_anomaly > 0.4 ? "#F97316" : "#1D9E75";
+    }
+
+    // Observation count
+    const obsEl = document.getElementById("obs-count");
+    if (obsEl) obsEl.textContent = `${z.obs_count} days`;
+
     const actions = {
       thermal_stress:  "URGENT: Thermal stress detected. Dispatch response team.",
       hypoxic_bloom:   "Monitor closely. Hypoxic bloom forming. Increase sampling.",
@@ -242,7 +247,6 @@ async function selectZone(zoneId) {
   } catch (e) { console.error("Zone detail error:", e); }
 }
 
-// ── SST Chart ──────────────────────────────────────────────
 async function renderSSTChart(zoneId) {
   try {
     let data;
@@ -272,7 +276,6 @@ async function renderSSTChart(zoneId) {
   } catch (e) { console.error("Chart error:", e); }
 }
 
-// ── Feedback ───────────────────────────────────────────────
 async function sendFeedback(type) {
   if (!selectedZone) return;
   const z = allZoneData.find(z => z.zone_id === selectedZone);
@@ -296,7 +299,6 @@ async function loadFeedbackStats() {
   } catch (e) {}
 }
 
-// ── Chat ───────────────────────────────────────────────────
 async function sendQuery() {
   const input = document.getElementById("chat-input");
   const q = input.value.trim();
@@ -327,7 +329,6 @@ function addChatMessage(role, text) {
   box.scrollTop = box.scrollHeight;
 }
 
-// ── Simulate ───────────────────────────────────────────────
 function toggleSimulate() {
   const btn = document.getElementById("simulate-btn");
   if (simulationRunning) {
@@ -365,5 +366,4 @@ function toggleSimulate() {
   }, 1000);
 }
 
-// ── Boot ───────────────────────────────────────────────────
-// Nothing auto-starts — waits for login
+// Boot — show login screen first

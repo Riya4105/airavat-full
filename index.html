@@ -11,13 +11,11 @@
 </head>
 <body>
 
-<!-- LOGIN SCREEN -->
 <div id="login-screen">
   <div id="login-box">
     <div id="login-logo">AIRAVAT 3.0</div>
     <div id="login-subtitle">AI-Powered Marine Environmental Sentinel</div>
     <div id="login-tagline">Indian Ocean · 7 Zones · Real-time ESG Intelligence</div>
-
     <div class="login-field">
       <label>Agency ID</label>
       <input id="login-username" type="text" placeholder="e.g. coast_guard"
@@ -28,10 +26,8 @@
       <input id="login-password" type="password" placeholder="Enter password"
              onkeydown="if(event.key==='Enter') doLogin()"/>
     </div>
-
     <button id="login-btn" onclick="doLogin()">Access Sentinel</button>
     <div id="login-error"></div>
-
     <div id="login-hint">
       <div class="hint-title">Demo credentials</div>
       <div class="hint-row" onclick="fillLogin('coast_guard','coastguard123')">
@@ -50,8 +46,7 @@
   </div>
 </div>
 
-<!-- MAIN APP (hidden until login) -->
-<div id="app" style="display:none; height:100vh; display:none; flex-direction:column;">
+<div id="app" style="display:none; flex-direction:column;">
 
   <div id="header">
     <div>
@@ -129,6 +124,14 @@
             <div class="metric-box">
               <div class="label">Event type</div>
               <div class="value" id="event-type">—</div>
+            </div>
+            <div class="metric-box">
+              <div class="label">VAE anomaly</div>
+              <div class="value" id="vae-anomaly">—</div>
+            </div>
+            <div class="metric-box">
+              <div class="label">Observations</div>
+              <div class="value" id="obs-count">—</div>
             </div>
           </div>
 
