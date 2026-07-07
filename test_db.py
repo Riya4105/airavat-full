@@ -1,6 +1,5 @@
 # test_db.py
 # Creates core tables on PostgreSQL (Railway compatible)
-
 import psycopg2
 import os
 from urllib.parse import urlparse
@@ -14,7 +13,7 @@ def get_db():
             port=parsed.port,
             database=parsed.path[1:],
             user=parsed.username,
-            password=parsed.password,
+            password="riyajoshi4105#",  # hardcode to avoid URL encoding issue
             sslmode="require"
         )
     else:
@@ -23,7 +22,6 @@ def get_db():
             database="airavat", user="airavat",
             password="airavat123"
         )
-
 print("=" * 50)
 print("AIRAVAT 3.0 — Database Setup")
 print("=" * 50)

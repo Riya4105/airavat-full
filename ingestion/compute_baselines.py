@@ -22,7 +22,7 @@ def get_db():
             port=parsed.port,
             database=parsed.path[1:],
             user=parsed.username,
-            password=parsed.password,
+            password=os.environ.get("DB_PASSWORD", parsed.password),
             sslmode="require"
         )
     else:
