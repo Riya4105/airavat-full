@@ -22,14 +22,18 @@ def get_db():
     if db_url:
         parsed = urlparse(db_url)
         return psycopg2.connect(
-            host=parsed.hostname, port=parsed.port,
-            database=parsed.path[1:], user=parsed.username,
-            password=parsed.password, sslmode="require"
+            host=parsed.hostname,
+            port=parsed.port,
+            database=parsed.path[1:],
+            user=parsed.username,
+            password=os.environ.get("DB_PASSWORD", parsed.password),
+            sslmode="require"
         )
     else:
         return psycopg2.connect(
             host="localhost", port=5432,
-            database="airavat", user="airavat", password="airavat123"
+            database="airavat", user="airavat",
+            password="airavat123"
         )
 
 # ── VAE Architecture ───────────────────────────────────────
