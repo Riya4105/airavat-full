@@ -39,7 +39,6 @@ def get_db():
             database="airavat", user="airavat",
             password="airavat123"
         )
-
 def fetch_sst(zone_id, zone_config, date_str):
     lon_min, lat_min, lon_max, lat_max = zone_config["bbox"]
     try:
