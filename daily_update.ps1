@@ -12,5 +12,9 @@ python ingestion\daily_ingest.py
 Write-Host "Step 2: Recomputing baselines..." -ForegroundColor Yellow
 python ingestion\compute_baselines.py
 
+Write-Host "Step 3: Logging ESG snapshot for paper..." -ForegroundColor Yellow
+python paper\daily_esg_log.py
+
 Write-Host "Done! Supabase database updated." -ForegroundColor Green
 Write-Host "Run 'python esg_engine\vae_encoder.py' weekly and push models." -ForegroundColor Gray
+
