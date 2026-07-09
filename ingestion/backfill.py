@@ -171,4 +171,4 @@ def run_backfill(days=90):
     print(f"{'=' * 58}")
 
 if __name__ == "__main__":
-    run_backfill(days=90)
+    run_backfill(days=180)
