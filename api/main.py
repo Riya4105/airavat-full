@@ -98,9 +98,53 @@ async def broadcast_zones():
             print(f"Broadcast error: {e}")
         await asyncio.sleep(30)
 
+async def auto_alert_loop():
+    """Checks for HIGH alerts every 30 minutes and dispatches SMS automatically."""
+    from api.alerts import dispatch_alert
+    from api.auth import AGENCIES
+
+    alerted_zones = set()
+    print("Auto-alert loop started — checking every 30 minutes")
+
+    # Wait 2 minutes after startup before first check
+    await asyncio.sleep(120)
+
+    while True:
+        try:
+            results = run_all_zones()
+            high_zones = [z for z in results if z["alert_level"] == "HIGH"]
+            recovered = {z["zone_id"] for z in results if z["alert_level"] != "HIGH"}
+
+            # Clear tracking for recovered zones
+            for zone_id in recovered:
+                alerted_zones.discard(zone_id)
+
+            # Dispatch alerts for new HIGH zones
+            for zone in high_zones:
+                if zone["zone_id"] not in alerted_zones:
+                    print(f"AUTO-ALERT: {zone['zone_name']} HIGH priority={zone['priority']}")
+                    for agency_id, agency in AGENCIES.items():
+                        if zone["zone_id"] in agency["zones"]:
+                            results_dispatch = dispatch_alert(zone, agency_id, "sms")
+                            for r in results_dispatch:
+                                if r.get("status") == "sent":
+                                    print(f"  SMS sent to {r['to']} for {agency['name']}")
+                    alerted_zones.add(zone["zone_id"])
+                else:
+                    print(f"Auto-alert: {zone['zone_name']} still HIGH — already alerted")
+
+            if not high_zones:
+                print(f"Auto-alert check: all zones WARN/NORMAL — no alerts needed")
+
+        except Exception as e:
+            print(f"Auto-alert loop error: {e}")
+
+        await asyncio.sleep(1800)  # 30 minutes
+
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(broadcast_zones())
+    asyncio.create_task(auto_alert_loop())
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
