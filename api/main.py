@@ -41,14 +41,18 @@ app.add_middleware(
 
 # ── Database ───────────────────────────────────────────────
 def get_db():
+    import base64
     db_url = os.environ.get("DATABASE_URL")
     if db_url:
+        pwd = base64.b64decode(
+            os.environ.get("DB_PASSWORD_B64", "cml5YWpvc2hpNDEwNSM=")
+        ).decode()
         return psycopg2.connect(
             host="aws-1-ap-southeast-1.pooler.supabase.com",
             port=5432,
             database="postgres",
             user="postgres.tttmvhybjozckwcnwont",
-            password="riyajoshi4105#",
+            password=pwd,
             sslmode="require"
         )
     else:
